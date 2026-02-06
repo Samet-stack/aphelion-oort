@@ -44,32 +44,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
   const [offlineState, setOfflineState] = useState<OfflineState>(offlineService.getState());
 
-  // Vérifier si l'utilisateur est déjà connecté au chargement
-  useEffect(() => {
-    const init = async () => {
-      if (authApi.isAuthenticated()) {
-        try {
-          const userData = await authApi.getMe();
-          setUser(userData);
-          await Promise.all([refreshReports(), loadStats()]);
-        } catch (error) {
-          // Token invalide
-          authApi.logout();
-        }
-      }
-      setIsLoading(false);
-    };
-    init();
-  }, []);
-
-  // S'abonner aux changements de l'état offline
-  useEffect(() => {
-    const unsubscribe = offlineService.subscribe((state) => {
-      setOfflineState(state);
-    });
-    return unsubscribe;
-  }, []);
-
   const refreshUser = useCallback(async () => {
     try {
       const userData = await authApi.getMe();
@@ -137,6 +111,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('Failed to load stats:', error);
     }
+  }, []);
+
+  // Vérifier si l'utilisateur est déjà connecté au chargement
+  useEffect(() => {
+    const init = async () => {
+      if (authApi.isAuthenticated()) {
+        try {
+          const userData = await authApi.getMe();
+          setUser(userData);
+          await Promise.all([refreshReports(), loadStats()]);
+        } catch (error) {
+          // Token invalide
+          authApi.logout();
+        }
+      }
+      setIsLoading(false);
+    };
+    init();
+  }, [loadStats, refreshReports]);
+
+  // S'abonner aux changements de l'état offline
+  useEffect(() => {
+    const unsubscribe = offlineService.subscribe((state) => {
+      setOfflineState(state);
+    });
+    return unsubscribe;
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
@@ -226,6 +226,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {

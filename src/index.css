@@ -1,23 +1,81 @@
 @import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 :root {
-  --bg: #0b0e11;
-  --bg-alt: #111827;
-  --surface: rgba(17, 24, 39, 0.72);
-  --surface-strong: rgba(15, 23, 42, 0.92);
-  --text: #f8fafc;
-  --text-muted: #a3b7cc;
-  --brand: #ffb703;
-  --brand-strong: #f97316;
-  --accent: #4dd0e1;
-  --success: #7cfc8a;
-  --warning: #ffd166;
-  --danger: #ff6b6b;
-  --info: #74c0fc;
-  --stroke: rgba(148, 163, 184, 0.2);
-  --shadow: 0 24px 60px rgba(5, 8, 13, 0.55);
-  --font-display: 'Space Grotesk', 'Segoe UI', sans-serif;
-  --font-body: 'Archivo', 'Segoe UI', sans-serif;
+  /* --- Palette Premium Dark (SiteFlow) --- */
+  /* Primary: Vibrant Amber/Orange for Visibility & Action (Chantier friendly) */
+  --primary-hue: 35;
+  --primary-sat: 90%;
+  --primary-light: 55%;
+  --primary: hsl(var(--primary-hue), var(--primary-sat), var(--primary-light));
+  --primary-hover: hsl(var(--primary-hue), var(--primary-sat), 65%);
+  --primary-glow: hsla(var(--primary-hue), var(--primary-sat), var(--primary-light), 0.4);
+
+  /* Backgrounds: Deep Blue/Slate ("Space" feel) instead of flat black */
+  --bg-hue: 222;
+  --bg-sat: 40%;
+  --bg-dark: 10%;
+  --bg-page: hsl(var(--bg-hue), var(--bg-sat), 8%);
+  --bg-surface: hsl(var(--bg-hue), var(--bg-sat), 14%);
+  --bg-surface-hover: hsl(var(--bg-hue), var(--bg-sat), 18%);
+  --bg-glass: hsla(var(--bg-hue), var(--bg-sat), 14%, 0.7);
+  /* Performance friendly glass */
+
+  /* Text & Content */
+  --text-main: hsl(210, 20%, 98%);
+  /* Almost White */
+  --text-muted: hsl(215, 20%, 75%);
+  /* Readable Grey */
+  --text-dim: hsl(215, 20%, 50%);
+  /* Disabled/Low priority */
+
+  /* Status Colors (Clear & Distinct) */
+  --success: hsl(150, 60%, 45%);
+  --warning: hsl(35, 90%, 55%);
+  --danger: hsl(0, 75%, 60%);
+  --info: hsl(210, 80%, 60%);
+
+  /* UI Tokens */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-pill: 9999px;
+
+  /* Spacing */
+  --header-height: 72px;
+  --sidebar-width: 280px;
+
+  /* Performance Optimizations via Variables */
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Borders - Subtle to avoid heavy shadows */
+  --border-light: hsla(215, 20%, 100%, 0.1);
+  --border-active: hsla(var(--primary-hue), var(--primary-sat), var(--primary-light), 0.5);
+
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: dark;
+  color: var(--text-main);
+  background-color: var(--bg-page);
+
+  /* --- Compatibility & Legacy Mappings (CRITICAL) --- */
+  --brand: var(--primary);
+  --brand-strong: hsl(var(--primary-hue), var(--primary-sat), 45%);
+  --bg: var(--bg-page);
+  --bg-alt: var(--bg-surface);
+  --surface: var(--bg-surface);
+  --surface-strong: var(--bg-surface-hover);
+  --text: var(--text-main);
+  --accent: var(--info);
+  --stroke: var(--border-light);
+  --shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 * {
@@ -122,16 +180,30 @@ select {
 .app__header {
   width: 100%;
   max-width: none;
-  /* Full width */
   padding: 20px 24px;
-  /* Internal padding instead of external */
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  position: relative;
-  z-index: 1;
+
+  /* Glass Effect - Optimized */
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--bg-glass);
+  backdrop-filter: blur(8px);
+  /* Reduced blur for better GPU perf */
+  border-bottom: 1px solid var(--border-light);
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+
+/* Fallback for low-end devices that struggle with backdrop-filter */
+@media (prefers-reduced-motion: reduce) {
+  .app__header {
+    backdrop-filter: none;
+    background: var(--bg-surface);
+  }
 }
 
 @media (min-width: 720px) {

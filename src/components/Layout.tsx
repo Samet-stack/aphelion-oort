@@ -3,6 +3,7 @@ import { branding } from '../config/branding';
 import { useAuth } from '../contexts/AuthContext';
 import { LogOut, User } from 'lucide-react';
 import { OfflineIndicator, OfflineStatusDot } from './OfflineIndicator';
+import { motion } from 'framer-motion';
 
 interface LayoutProps {
     children: React.ReactNode;
@@ -15,9 +16,17 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
     return (
         <div className="app">
-            <header className="app__header">
+            <motion.header
+                className="app__header"
+                initial={{ y: -20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ duration: 0.5 }}
+                style={{
+                    // Styles moved to .app__header in index.css for better performance
+                }}
+            >
                 <div className="brand">
-                    <div className="brand__mark">
+                    <div className="brand__mark" style={{ background: 'var(--primary)', color: 'black' }}>
                         {showLogo ? (
                             <img
                                 src={branding.logoUrl}
@@ -25,31 +34,32 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                                 onError={() => setLogoError(true)}
                             />
                         ) : (
-                            <span className="brand__mark-text">SF</span>
+                            <span className="brand__mark-text" style={{ fontWeight: 800 }}>SF</span>
                         )}
                     </div>
                     <div className="brand__text">
-                        <span className="brand__name">{branding.productName}</span>
-                        <span className="brand__tag">{branding.companyName}</span>
+                        <span className="brand__name" style={{ letterSpacing: '-0.02em' }}>{branding.productName}</span>
+                        <span className="brand__tag" style={{ color: 'var(--primary)' }}>{branding.companyName}</span>
                     </div>
                 </div>
-                
+
                 <div className="status-row">
                     {isAuthenticated && user && <OfflineStatusDot />}
                     {isAuthenticated && user ? (
-                        <>
-                            <div className="status-user" title={user.email}>
-                                <User size={14} />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                            <div className="status-user" title={user.email} style={{ background: 'var(--bg-surface-hover)', padding: '4px 12px', borderRadius: '20px' }}>
+                                <User size={14} color="var(--primary)" />
                                 <span className="status-user__name">{user.firstName || user.email}</span>
                             </div>
-                            <button 
+                            <button
                                 onClick={logout}
                                 className="btn btn--ghost btn--danger btn--sm btn--pill"
+                                style={{ border: '1px solid var(--border-light)' }}
                             >
                                 <LogOut size={16} />
                                 <span>Déconnexion</span>
                             </button>
-                        </>
+                        </div>
                     ) : (
                         <>
                             <span className="status-pill status-pill--success">Mode démo</span>
@@ -57,19 +67,21 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                         </>
                     )}
                 </div>
-            </header>
+            </motion.header>
 
             <main className="app__main">
-                <div className="app__surface">{children}</div>
+                <div className="app__surface" style={{ maxWidth: '100%', padding: 0 }}>
+                    {children}
+                </div>
             </main>
 
-            <footer className="app__footer">
+            <footer className="app__footer" style={{ borderTop: '1px solid var(--border-light)', color: 'var(--text-muted)' }}>
                 {branding.productName} © 2026
                 {isAuthenticated && user?.companyName && (
                     <span className="ml-2">• {user.companyName}</span>
                 )}
             </footer>
-            
+
             {isAuthenticated && <OfflineIndicator />}
         </div>
     );

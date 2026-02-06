@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { AnimatePresence } from 'framer-motion';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Layout } from './components/Layout';
 import { Hero } from './components/Hero';
@@ -12,6 +13,7 @@ import { Login } from './components/Login';
 import { Register } from './components/Register';
 import { VerifyEmail } from './components/VerifyEmail';
 import { RegisterSuccess } from './components/RegisterSuccess';
+import { PageTransition } from './components/PageTransition';
 import { ApiPlan } from './services/api';
 
 
@@ -30,10 +32,10 @@ function AppContent() {
       <div className="view view--centered">
         <div className="card" style={{ maxWidth: '420px', width: '100%', textAlign: 'center', padding: '2.5rem 2rem' }}>
           <div className="spin" style={{ fontSize: '2rem', marginBottom: '1rem' }}>⏳</div>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--color-text-primary)', marginBottom: '0.25rem' }}>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '0.25rem' }}>
             Chargement...
           </h2>
-          <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.9rem' }}>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
             Connexion au serveur et preparation de la session.
           </p>
         </div>
@@ -44,9 +46,13 @@ function AppContent() {
   // Si pas authentifié, montrer l'écran de auth
   if (!isAuthenticated) {
     return authMode === 'login' ? (
-      <Login onSwitchToRegister={() => setAuthMode('register')} />
+      <PageTransition key="login">
+        <Login onSwitchToRegister={() => setAuthMode('register')} />
+      </PageTransition>
     ) : (
-      <Register onSwitchToLogin={() => setAuthMode('login')} />
+      <PageTransition key="register">
+        <Register onSwitchToLogin={() => setAuthMode('login')} />
+      </PageTransition>
     );
   }
 
@@ -85,44 +91,58 @@ function AppContent() {
 
   return (
     <Layout>
-      {view === 'LANDING' && (
-        <Hero onStart={handleStart} onHistory={handleHistory} onPlans={handlePlans} />
-      )}
+      <AnimatePresence mode="wait">
+        {view === 'LANDING' && (
+          <PageTransition key="landing">
+            <Hero onStart={handleStart} onHistory={handleHistory} onPlans={handlePlans} />
+          </PageTransition>
+        )}
 
-      {view === 'SELECT_PLAN' && (
-        <PlanSelector
-          onSelectPlan={handleSelectPlan}
-          onBack={handleReset}
-          onManagePlans={handlePlans}
-        />
-      )}
+        {view === 'SELECT_PLAN' && (
+          <PageTransition key="select-plan">
+            <PlanSelector
+              onSelectPlan={handleSelectPlan}
+              onBack={handleReset}
+              onManagePlans={handlePlans}
+            />
+          </PageTransition>
+        )}
 
-      {view === 'CAMERA' && selectedPlan && (
-        <CameraView
-          onCapture={handleCapture}
-          onBack={handleBackToPlanSelection}
-          selectedPlan={selectedPlan}
-        />
-      )}
+        {view === 'CAMERA' && selectedPlan && (
+          <PageTransition key="camera">
+            <CameraView
+              onCapture={handleCapture}
+              onBack={handleBackToPlanSelection}
+              selectedPlan={selectedPlan}
+            />
+          </PageTransition>
+        )}
 
-      {view === 'REPORT' && capturedImage && selectedPlan && (
-        <ReportView
-          imageFile={capturedImage}
-          selectedPlan={selectedPlan}
-          onBack={handleBackToCamera}
-          onReset={handleReset}
-        />
-      )}
+        {view === 'REPORT' && capturedImage && selectedPlan && (
+          <PageTransition key="report">
+            <ReportView
+              imageFile={capturedImage}
+              selectedPlan={selectedPlan}
+              onBack={handleBackToCamera}
+              onReset={handleReset}
+            />
+          </PageTransition>
+        )}
 
-      {view === 'HISTORY' && (
-        <HistoryView
-          onBack={handleReset}
-        />
-      )}
+        {view === 'HISTORY' && (
+          <PageTransition key="history">
+            <HistoryView
+              onBack={handleReset}
+            />
+          </PageTransition>
+        )}
 
-      {view === 'PLANS' && (
-        <PlanView onBack={handleReset} />
-      )}
+        {view === 'PLANS' && (
+          <PageTransition key="plans">
+            <PlanView onBack={handleReset} />
+          </PageTransition>
+        )}
+      </AnimatePresence>
     </Layout>
   );
 }
