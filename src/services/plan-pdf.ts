@@ -98,7 +98,7 @@ const renderPlanWithMarkers = (plan: ApiPlan): Promise<string> => {
   });
 };
 
-export const generatePlanPDF = async (plan: ApiPlan) => {
+export const generatePlanPDF = async (plan: ApiPlan): Promise<{ blob: Blob; filename: string }> => {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
 
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -459,7 +459,8 @@ export const generatePlanPDF = async (plan: ApiPlan) => {
     doc.text(plan.siteName || '', pageWidth - margin, pageHeight - 3, { align: 'right' });
   }
 
-  // Sauvegarde
+  // Return blob instead of saving
   const filename = `Plan_${(plan.siteName || 'Chantier').replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
-  doc.save(filename);
+  const blob = doc.output('blob');
+  return { blob, filename };
 };

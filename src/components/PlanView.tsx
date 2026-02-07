@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { ArrowLeft, Plus, Map, Trash2, ZoomIn, ZoomOut, FileText, Loader2, Upload, Camera } from 'lucide-react';
+import { ArrowLeft, Plus, Map, Trash2, ZoomIn, ZoomOut, FileText, Loader2, Upload, Camera, ChevronRight } from 'lucide-react';
 import { plansApi, ApiPlan, ApiPlanPoint, ApiPlanListItem } from '../services/api';
-import { PlanPointForm, PlanPointFormData } from './PlanPointForm';
-import { PlanPointDetail } from './PlanPointDetail';
+import { PlanPointFormData } from './PlanPointForm';
+import { PlanPointPanel } from './PlanPointPanel';
 import { generatePlanPDF } from '../services/plan-pdf';
 
 interface PlanViewProps {
@@ -88,11 +88,11 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
   // Click tracking for distinguishing click vs drag
   const mouseDownPos = useRef<{ x: number; y: number } | null>(null);
 
-  // Point modals
-  const [showPointForm, setShowPointForm] = useState(false);
+  // Side panel
+  type PanelMode = 'closed' | 'detail' | 'edit' | 'create';
+  const [panelMode, setPanelMode] = useState<PanelMode>('closed');
   const [clickPosition, setClickPosition] = useState<{ x: number; y: number } | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<ApiPlanPoint | null>(null);
-  const [showPointDetail, setShowPointDetail] = useState(false);
   const [editingPoint, setEditingPoint] = useState<ApiPlanPoint | null>(null);
 
   // PDF
@@ -205,13 +205,15 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
 
     setClickPosition({ x: posX, y: posY });
     setEditingPoint(null);
-    setShowPointForm(true);
+    setSelectedPoint(null);
+    setPanelMode('create');
   }, []);
 
   const handleMarkerClick = (point: ApiPlanPoint, e: React.MouseEvent) => {
     e.stopPropagation();
     setSelectedPoint(point);
-    setShowPointDetail(true);
+    setEditingPoint(null);
+    setPanelMode('detail');
   };
 
   // Point CRUD
@@ -225,9 +227,9 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
         setCurrentPlan((prev) =>
           prev ? { ...prev, points: prev.points.map((p) => (p.id === updated.id ? updated : p)) } : null
         );
-        setShowPointForm(false);
+        setSelectedPoint(updated);
         setEditingPoint(null);
-        setShowPointDetail(false);
+        setPanelMode('detail');
       } catch (err) {
         console.error('Error updating point:', err);
         alert('Erreur lors de la mise a jour.');
@@ -243,7 +245,8 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
         setCurrentPlan((prev) =>
           prev ? { ...prev, points: [...prev.points, newPoint] } : null
         );
-        setShowPointForm(false);
+        setSelectedPoint(newPoint);
+        setPanelMode('detail');
         setClickPosition(null);
       } catch (err) {
         console.error('Error creating point:', err);
@@ -259,8 +262,9 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
       setCurrentPlan((prev) =>
         prev ? { ...prev, points: prev.points.filter((p) => p.id !== pointId) } : null
       );
-      setShowPointDetail(false);
+      setPanelMode('closed');
       setSelectedPoint(null);
+      setEditingPoint(null);
     } catch (err) {
       console.error('Error deleting point:', err);
       alert('Erreur lors de la suppression.');
@@ -270,8 +274,20 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
   const handleEditFromDetail = () => {
     if (!selectedPoint) return;
     setEditingPoint(selectedPoint);
-    setShowPointDetail(false);
-    setShowPointForm(true);
+    setPanelMode('edit');
+  };
+
+  const handlePanelClose = () => {
+    setPanelMode('closed');
+    setSelectedPoint(null);
+    setEditingPoint(null);
+    setClickPosition(null);
+  };
+
+  const handleNavigatePoint = (point: ApiPlanPoint) => {
+    setSelectedPoint(point);
+    setEditingPoint(null);
+    setPanelMode('detail');
   };
 
   // PDF
@@ -279,7 +295,19 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
     if (!currentPlan) return;
     setGeneratingPdf(true);
     try {
-      await generatePlanPDF(currentPlan);
+      const { blob, filename } = await generatePlanPDF(currentPlan);
+      const blobUrl = URL.createObjectURL(blob);
+      const newTab = window.open(blobUrl, '_blank');
+      if (!newTab) {
+        // Fallback download if popup blocked
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
     } catch (err) {
       console.error('Error generating PDF:', err);
       alert('Erreur lors de la generation du PDF.');
@@ -470,6 +498,8 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
 
   // VIEWER view
   if (subView === 'VIEWER' && currentPlan) {
+    const isPanelOpen = panelMode !== 'closed';
+
     return (
       <div className="view">
         <div className="view__top">
@@ -491,151 +521,136 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
           </div>
         </div>
 
-        <div className="card">
-          {/* Plan header */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <div>
-              <h2 style={{ fontSize: '1.2rem', fontWeight: 800 }}>{currentPlan.siteName}</h2>
-              {currentPlan.address && (
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '2px' }}>{currentPlan.address}</p>
-              )}
-            </div>
-            <span className="badge badge--info">{currentPlan.points.length} point(s)</span>
-          </div>
-
-          {/* Plan viewer */}
-          <div className="plan-viewer" ref={viewerRef}>
-            {/* Zoom controls */}
-            <div className="plan-viewer__controls">
-              <button className="btn btn--ghost" onClick={() => setZoom((z) => Math.min(z + 0.25, 4))} title="Zoom +">
-                <ZoomIn size={18} />
-              </button>
-              <button className="btn btn--ghost" onClick={() => setZoom((z) => Math.max(z - 0.25, 0.5))} title="Zoom -">
-                <ZoomOut size={18} />
-              </button>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', padding: '4px 8px' }}>
-                {Math.round(zoom * 100)}%
-              </span>
-            </div>
-
-            <div
-              className="plan-viewer__canvas"
-              style={{ transform: `scale(${zoom})`, transformOrigin: '0 0' }}
-              onMouseDown={handleCanvasMouseDown}
-              onClick={handleCanvasClick}
-            >
-              <img
-                ref={imageRef}
-                src={currentPlan.imageDataUrl}
-                alt="Plan"
-                className="plan-viewer__image"
-                draggable={false}
-              />
-
-              {/* Point markers */}
-              {currentPlan.points.map((point) => (
-                <div
-                  key={point.id}
-                  className={`plan-marker plan-marker--${point.status}`}
-                  style={{
-                    left: `${point.positionX}%`,
-                    top: `${point.positionY}%`,
-                  }}
-                  onClick={(e) => handleMarkerClick(point, e)}
-                  title={`#${point.pointNumber} ${point.title}`}
-                >
-                  {point.pointNumber}
+        <div className={`plan-viewer-layout ${isPanelOpen ? 'plan-viewer-layout--open' : ''}`}>
+          <div className="plan-viewer-layout__main">
+            <div className="card">
+              {/* Plan header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <div>
+                  <h2 style={{ fontSize: '1.2rem', fontWeight: 800 }}>{currentPlan.siteName}</h2>
+                  {currentPlan.address && (
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '2px' }}>{currentPlan.address}</p>
+                  )}
                 </div>
-              ))}
-            </div>
-          </div>
+                <span className="badge badge--info">{currentPlan.points.length} point(s)</span>
+              </div>
 
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '8px', textAlign: 'center' }}>
-            Cliquez sur le plan pour ajouter un point
-          </p>
+              {/* Plan viewer */}
+              <div className="plan-viewer" ref={viewerRef}>
+                {/* Zoom controls */}
+                <div className="plan-viewer__controls">
+                  <button className="btn btn--ghost" onClick={() => setZoom((z) => Math.min(z + 0.25, 4))} title="Zoom +">
+                    <ZoomIn size={18} />
+                  </button>
+                  <button className="btn btn--ghost" onClick={() => setZoom((z) => Math.max(z - 0.25, 0.5))} title="Zoom -">
+                    <ZoomOut size={18} />
+                  </button>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', padding: '4px 8px' }}>
+                    {Math.round(zoom * 100)}%
+                  </span>
+                </div>
 
-          {/* Points list */}
-          {currentPlan.points.length > 0 && (
-            <div style={{ marginTop: '20px' }}>
-              <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px' }}>
-                Points d'inspection ({currentPlan.points.length})
-              </h3>
-              <div className="plan-points-list">
-                {[...currentPlan.points]
-                  .sort((a, b) => a.pointNumber - b.pointNumber)
-                  .map((point) => (
+                <div
+                  className="plan-viewer__canvas"
+                  style={{ transform: `scale(${zoom})`, transformOrigin: '0 0' }}
+                  onMouseDown={handleCanvasMouseDown}
+                  onClick={handleCanvasClick}
+                >
+                  <img
+                    ref={imageRef}
+                    src={currentPlan.imageDataUrl}
+                    alt="Plan"
+                    className="plan-viewer__image"
+                    draggable={false}
+                  />
+
+                  {/* Point markers */}
+                  {currentPlan.points.map((pt) => (
                     <div
-                      key={point.id}
-                      className="plan-points-list__item"
-                      onClick={() => {
-                        setSelectedPoint(point);
-                        setShowPointDetail(true);
+                      key={pt.id}
+                      className={`plan-marker plan-marker--${pt.status}${selectedPoint?.id === pt.id && isPanelOpen ? ' plan-marker--active' : ''}`}
+                      style={{
+                        left: `${pt.positionX}%`,
+                        top: `${pt.positionY}%`,
                       }}
+                      onClick={(e) => handleMarkerClick(pt, e)}
+                      title={`#${pt.pointNumber} ${pt.title}`}
                     >
-                      <div
-                        className="plan-points-list__number"
-                        style={{
-                          background:
-                            point.status === 'termine'
-                              ? 'var(--success)'
-                              : point.status === 'en_cours'
-                                ? 'var(--warning)'
-                                : 'var(--danger)',
-                        }}
-                      >
-                        {point.pointNumber}
-                      </div>
-                      <div className="plan-points-list__content">
-                        <div className="plan-points-list__title">{point.title}</div>
-                        <div className="plan-points-list__badges">
-                          <span className="badge badge--info" style={{ fontSize: '0.7rem' }}>
-                            {categoryLabels[point.category] || point.category}
-                          </span>
-                          <span className={`badge ${statusBadge[point.status]}`} style={{ fontSize: '0.7rem' }}>
-                            {statusLabels[point.status]}
-                          </span>
-                        </div>
-                      </div>
+                      {pt.pointNumber}
                     </div>
                   ))}
+                </div>
               </div>
+
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '8px', textAlign: 'center' }}>
+                Cliquez sur le plan pour ajouter un point
+              </p>
+
+              {/* Points list */}
+              {currentPlan.points.length > 0 && (
+                <div style={{ marginTop: '20px' }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px' }}>
+                    Points d'inspection ({currentPlan.points.length})
+                  </h3>
+                  <div className="plan-points-list">
+                    {[...currentPlan.points]
+                      .sort((a, b) => a.pointNumber - b.pointNumber)
+                      .map((pt) => (
+                        <div
+                          key={pt.id}
+                          className={`plan-points-list__item${selectedPoint?.id === pt.id && isPanelOpen ? ' plan-points-list__item--active' : ''}`}
+                          onClick={() => {
+                            setSelectedPoint(pt);
+                            setEditingPoint(null);
+                            setPanelMode('detail');
+                          }}
+                        >
+                          <div
+                            className="plan-points-list__number"
+                            style={{
+                              background:
+                                pt.status === 'termine'
+                                  ? 'var(--success)'
+                                  : pt.status === 'en_cours'
+                                    ? 'var(--warning)'
+                                    : 'var(--danger)',
+                            }}
+                          >
+                            {pt.pointNumber}
+                          </div>
+                          <div className="plan-points-list__content">
+                            <div className="plan-points-list__title">{pt.title}</div>
+                            <div className="plan-points-list__badges">
+                              <span className="badge badge--info" style={{ fontSize: '0.7rem' }}>
+                                {categoryLabels[pt.category] || pt.category}
+                              </span>
+                              <span className={`badge ${statusBadge[pt.status]}`} style={{ fontSize: '0.7rem' }}>
+                                {statusLabels[pt.status]}
+                              </span>
+                            </div>
+                          </div>
+                          <ChevronRight size={16} className="plan-points-list__chevron" />
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </div>
 
-        {/* Modals */}
-        {showPointForm && (
-          <PlanPointForm
+          {/* Side panel */}
+          <PlanPointPanel
+            isOpen={isPanelOpen}
+            mode={panelMode === 'closed' ? 'detail' : panelMode}
+            point={panelMode === 'edit' ? editingPoint || undefined : selectedPoint || undefined}
+            points={currentPlan.points}
+            onClose={handlePanelClose}
             onSave={handleSavePoint}
-            onClose={() => {
-              setShowPointForm(false);
-              setClickPosition(null);
-              setEditingPoint(null);
-            }}
-            initialData={editingPoint ? {
-              title: editingPoint.title,
-              description: editingPoint.description || '',
-              category: editingPoint.category,
-              photoDataUrl: editingPoint.photoDataUrl,
-              dateLabel: editingPoint.dateLabel,
-              room: editingPoint.room || '',
-              status: editingPoint.status,
-            } : undefined}
-            isEdit={!!editingPoint}
-          />
-        )}
-
-        {showPointDetail && selectedPoint && (
-          <PlanPointDetail
-            point={selectedPoint}
-            onClose={() => {
-              setShowPointDetail(false);
-              setSelectedPoint(null);
-            }}
+            onDelete={handleDeletePoint}
             onEdit={handleEditFromDetail}
-            onDelete={() => handleDeletePoint(selectedPoint.id)}
+            onNavigate={handleNavigatePoint}
           />
-        )}
+        </div>
       </div>
     );
   }

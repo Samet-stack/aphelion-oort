@@ -1,5 +1,8 @@
 // Service API pour communiquer avec le backend
-export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+// Default to relative `/api` so:
+// - prod: same-origin (backend serves both frontend + API)
+// - dev: Vite can proxy `/api` to the backend (see `vite.config.ts`)
+export const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 // Type pour les réponses API
 export interface ApiResponse<T = any> {
@@ -85,13 +88,21 @@ const fetchWithAuth = async (
     ...options,
     headers
   });
-  
-  const data = await response.json();
-  
+
+  let data: ApiResponse;
+  try {
+    data = await response.json();
+  } catch {
+    throw createApiError(response.status, {
+      success: false,
+      message: `Le serveur ne répond pas (HTTP ${response.status || 0})`
+    });
+  }
+
   if (!response.ok) {
     throw createApiError(response.status, data);
   }
-  
+
   return data;
 };
 

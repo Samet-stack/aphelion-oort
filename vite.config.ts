@@ -4,6 +4,15 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vitejs.dev/config/
 export default defineConfig({
+    server: {
+        // Avoid CORS issues in dev by proxying API calls through Vite.
+        proxy: {
+            '/api': {
+                target: 'http://localhost:3001',
+                changeOrigin: true,
+            },
+        },
+    },
     plugins: [
         react(),
         VitePWA({
