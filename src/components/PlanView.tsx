@@ -3,7 +3,7 @@ import { ArrowLeft, Plus, Map, Trash2, ZoomIn, ZoomOut, FileText, Loader2, Uploa
 import { plansApi, ApiPlan, ApiPlanPoint, ApiPlanListItem } from '../services/api';
 import { PlanPointFormData } from './PlanPointForm';
 import { PlanPointPanel } from './PlanPointPanel';
-import { generatePlanPDF } from '../services/plan-pdf';
+import { generatePlanPDFPremium as generatePlanPDF } from '../services/plan-pdf-premium';
 
 interface PlanViewProps {
   onBack: () => void;

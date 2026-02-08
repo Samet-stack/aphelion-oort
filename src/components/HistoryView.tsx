@@ -97,7 +97,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
     }
 
     return (
-        <div className="view" style={{ maxWidth: '1200px', margin: '0 auto' }}>
+        <div className="view">
             <motion.div
                 className="view__top"
                 initial={{ opacity: 0, y: -10 }}
