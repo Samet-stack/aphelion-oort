@@ -423,7 +423,9 @@ export const generatePlanPDFPremium = async (plan: ApiPlan): Promise<{ blob: Blo
         imgHeight = maxHeight;
         imgWidth = imgHeight * ratio;
       }
-    } catch {}
+    } catch {
+      // Ignore image measurement errors; we keep default dimensions.
+    }
     
     // Centrer si plus petit
     const imgX = ctx.margin + (ctx.contentWidth - imgWidth) / 2;
@@ -662,20 +664,22 @@ export const generatePlanPDFPremium = async (plan: ApiPlan): Promise<{ blob: Blo
           if (format) {
             const props = doc.getImageProperties(point.photoDataUrl);
             const ratio = props.width / props.height;
-            
+
             let dw = photoW - 4;
             let dh = dw / ratio;
             if (dh > photoH - 4) {
               dh = photoH - 4;
               dw = dh * ratio;
             }
-            
+
             const px = ctx.margin + 6 + (photoW - dw) / 2;
             const py = innerY + (photoH - dh) / 2;
-            
+
             doc.addImage(point.photoDataUrl, format, px, py, dw, dh);
           }
-        } catch {}
+        } catch {
+          // Ignore photo rendering errors; we keep PDF export working.
+        }
         
         // Bordure photo
         setDraw(doc, PALETTE.lightGray);

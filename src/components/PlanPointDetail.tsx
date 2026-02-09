@@ -41,56 +41,96 @@ const categoryBadge: Record<string, string> = {
   validation: 'badge--success',
 };
 
-export const PlanPointDetailContent: React.FC<PlanPointDetailContentProps> = ({ point }) => {
-  return (
-    <>
-      {/* Photo */}
-      <img
-        src={point.photoDataUrl}
-        alt={point.title}
-        className="plan-panel__photo"
-        style={{
-          width: '100%',
-          borderRadius: '12px',
-          border: '1px solid var(--stroke)',
-          maxHeight: '300px',
-          objectFit: 'contain',
-          background: 'rgba(0,0,0,0.2)',
-        }}
-      />
 
-      {/* Badges */}
-      <div className="plan-panel__badges" style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
-        <span className={`badge ${categoryBadge[point.category] || 'badge--info'}`}>
-          <Tag size={12} /> {categoryLabels[point.category] || point.category}
-        </span>
-        <span className={`badge ${statusBadge[point.status] || 'badge--info'}`}>
+export const PlanPointDetailContent: React.FC<PlanPointDetailContentProps> = ({ point }) => {
+  const isProblem = point.status === 'a_faire' || point.category === 'defaut';
+
+  return (
+    <div className={`plan-detail-content ${isProblem ? 'problem-highlight' : ''}`} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+      {/* Hero Photo with Gradient Overlay */}
+      <div className="plan-detail__hero" style={{ position: 'relative', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 8px 20px rgba(0,0,0,0.3)' }}>
+        <img
+          src={point.photoDataUrl}
+          alt={point.title}
+          style={{
+            width: '100%',
+            height: '240px',
+            objectFit: 'cover',
+            display: 'block'
+          }}
+        />
+        <div style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          padding: '20px',
+          background: 'linear-gradient(to top, rgba(0,0,0,0.8), transparent)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span className={`badge ${categoryBadge[point.category] || 'badge--info'}`}>
+              <Tag size={12} /> {categoryLabels[point.category] || point.category}
+            </span>
+            {isProblem && (
+              <span className="badge" style={{ background: '#ef4444', color: 'white', border: 'none', boxShadow: '0 0 10px rgba(239, 68, 68, 0.5)' }}>
+                <span className="problem-pulse-indicator" style={{ background: 'white', width: '8px', height: '8px', marginRight: '6px' }} />
+                Problème détecté
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Title & Status */}
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+          <h4 style={{ fontSize: '1.4rem', fontWeight: 700, lineHeight: 1.2 }}>{point.title}</h4>
+        </div>
+
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Calendar size={14} />
+            <span>{point.dateLabel}</span>
+          </div>
+          {point.room && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <MapPin size={14} />
+              <span>{point.room}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ height: '1px', background: 'var(--border-light)', margin: '4px 0' }} />
+
+      {/* Description */}
+      {point.description ? (
+        <div className="plan-panel__desc">
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Description</p>
+          <p style={{ fontSize: '1rem', lineHeight: 1.6, color: 'var(--text-main)' }}>{point.description}</p>
+        </div>
+      ) : (
+        <p style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Aucune description.</p>
+      )}
+
+      {/* Status Bar */}
+      <div style={{
+        background: 'var(--bg-surface)',
+        padding: '12px 16px',
+        borderRadius: '12px',
+        border: '1px solid var(--border-light)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between'
+      }}>
+        <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>Statut actuel</span>
+        <span className={`badge ${statusBadge[point.status] || 'badge--info'}`} style={{ fontSize: '0.85rem', padding: '6px 12px' }}>
           {statusLabels[point.status] || point.status}
         </span>
       </div>
 
-      {/* Description */}
-      {point.description && (
-        <div className="plan-panel__desc" style={{ marginTop: '12px' }}>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '4px' }}>Description</p>
-          <p style={{ fontSize: '0.95rem' }}>{point.description}</p>
-        </div>
-      )}
-
-      {/* Meta */}
-      <div className="plan-panel__meta" style={{ marginTop: '16px', display: 'grid', gap: '8px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem' }}>
-          <Calendar size={14} style={{ color: 'var(--text-muted)' }} />
-          <span>{point.dateLabel}</span>
-        </div>
-        {point.room && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.9rem' }}>
-            <MapPin size={14} style={{ color: 'var(--text-muted)' }} />
-            <span>{point.room}</span>
-          </div>
-        )}
-      </div>
-    </>
+    </div>
   );
 };
 

@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Trash2, Download, Euro, ClipboardList, Share2, FileSpreadsheet, CloudOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { generatePremiumPDF } from '../services/pdf-premium';
 import { ShareReportModal } from './ShareReportModal';
 import { ExportModal } from './ExportModal';
 import { branding } from '../config/branding';
-import type { ApiReport } from '../services/api';
+import { reportsApi, type ApiReport } from '../services/api';
 import { motion } from 'framer-motion';
 
 interface HistoryViewProps {
@@ -13,14 +12,15 @@ interface HistoryViewProps {
 }
 
 export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
-    const { reports, deleteReport, stats, isLoading } = useAuth();
+    const { reports, deleteReport, stats, isLoading, refreshReports } = useAuth();
     const [searchQuery, setSearchQuery] = useState('');
     const [downloadingId, setDownloadingId] = useState<string | null>(null);
     const [sharingReport, setSharingReport] = useState<ApiReport | null>(null);
     const [showExport, setShowExport] = useState(false);
+    const [loadingReports, setLoadingReports] = useState(false);
 
     // Filtrer les rapports
-    const filteredReports = reports.filter(report => {
+    const filteredReports = useMemo(() => reports.filter(report => {
         if (!searchQuery) return true;
         const query = searchQuery.toLowerCase();
         return (
@@ -29,7 +29,23 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
             report.clientName?.toLowerCase().includes(query) ||
             report.address.toLowerCase().includes(query)
         );
-    });
+    }), [reports, searchQuery]);
+
+    useEffect(() => {
+        let active = true;
+        const run = async () => {
+            setLoadingReports(true);
+            try {
+                await refreshReports();
+            } finally {
+                if (active) setLoadingReports(false);
+            }
+        };
+        run();
+        return () => {
+            active = false;
+        };
+    }, [refreshReports]);
 
     const handleDelete = async (id: string) => {
         if (!confirm('Supprimer ce rapport définitivement ?')) return;
@@ -43,28 +59,42 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
     const handleDownload = async (report: ApiReport) => {
         setDownloadingId(report.id);
         try {
-            await generatePremiumPDF({
-                imageDataUrl: report.imageDataUrl,
-                address: report.address,
-                description: report.description,
-                date: report.dateLabel,
-                coordinates: report.coordinates,
-                accuracy: report.accuracy,
-                locationSource: report.locationSource as 'gps' | 'demo' | 'unavailable',
-                reportId: report.reportId,
+            const isLocal = report.id.startsWith('local-');
+            const fullReport = isLocal || report.imageDataUrl
+                ? report
+                : await reportsApi.getById(report.id);
+
+            const { generatePremiumPDF } = await import('../services/pdf-premium');
+            const { blob, filename } = await generatePremiumPDF({
+                imageDataUrl: fullReport.imageDataUrl,
+                address: fullReport.address,
+                description: fullReport.description,
+                date: fullReport.dateLabel,
+                coordinates: fullReport.coordinates,
+                accuracy: fullReport.accuracy,
+                locationSource: fullReport.locationSource as 'gps' | 'demo' | 'unavailable',
+                reportId: fullReport.reportId,
                 companyName: branding.companyName,
                 reportTitle: branding.reportTitle,
                 productName: branding.productName,
                 logoUrl: branding.logoUrl,
-                siteName: report.siteName,
-                operatorName: report.operatorName,
-                clientName: report.clientName,
-                priority: report.priority,
-                category: report.category as 'safety' | 'progress' | 'anomaly' | 'other',
-                integrityHash: report.integrityHash,
-                extraWorks: report.extraWorks,
-                clientSignature: report.clientSignature,
+                siteName: fullReport.siteName,
+                operatorName: fullReport.operatorName,
+                clientName: fullReport.clientName,
+                priority: fullReport.priority,
+                category: fullReport.category as 'safety' | 'progress' | 'anomaly' | 'other',
+                integrityHash: fullReport.integrityHash,
+                extraWorks: fullReport.extraWorks,
+                clientSignature: fullReport.clientSignature,
             });
+            const blobUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
         } catch (err) {
             alert('Erreur lors de la génération du PDF');
         } finally {
@@ -85,7 +115,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
         visible: { opacity: 1, y: 0 }
     };
 
-    if (isLoading) {
+    if (isLoading || loadingReports) {
         return (
             <div className="view">
                 <div className="card analysis" style={{ padding: '3rem' }}>
@@ -180,6 +210,11 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
                     >
                         {filteredReports.map((report) => {
                             const isLocal = report.id.startsWith('local-');
+                            const extraCount = report.extraWorksCount ?? report.extraWorks?.length ?? 0;
+                            const extraTotal =
+                                report.extraWorksTotal ??
+                                report.extraWorks?.reduce((s, w) => s + (w.estimatedCost || 0), 0) ??
+                                0;
                             return (
                                 <motion.article
                                     key={report.id}
@@ -194,7 +229,13 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
                                 >
                                     <div className="history-card__media">
                                         {report.imageDataUrl ? (
-                                            <img src={report.imageDataUrl} alt="Aperçu" style={{ objectFit: 'cover' }} />
+                                            <img
+                                                src={report.imageDataUrl}
+                                                alt="Aperçu"
+                                                loading="lazy"
+                                                decoding="async"
+                                                style={{ objectFit: 'cover' }}
+                                            />
                                         ) : (
                                             <div className="history-card__placeholder">Aperçu indisponible</div>
                                         )}
@@ -218,10 +259,10 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
                                                 <span className="detail-sub" style={{ color: 'var(--text-muted)' }}>Client: {report.clientName}</span>
                                             )}
                                             <span className="detail-sub">{report.address}</span>
-                                            {report.extraWorks && report.extraWorks.length > 0 && (
+                                            {extraCount > 0 && (
                                                 <span className="badge badge--info" style={{ marginTop: '4px', width: 'fit-content' }}>
                                                     <Euro size={12} />
-                                                    {report.extraWorks.length} TS • {report.extraWorks.reduce((s, w) => s + w.estimatedCost, 0)}€
+                                                    {extraCount} TS • {Math.round(extraTotal).toLocaleString('fr-FR')}€
                                                 </span>
                                             )}
                                         </div>

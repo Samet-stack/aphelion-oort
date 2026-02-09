@@ -12,16 +12,68 @@ router.use(authMiddleware);
 router.get('/', async (req, res) => {
   try {
     const userId = req.user.id;
-    const { limit = 50, offset = 0 } = req.query;
-    
+    const { limit = 50, offset = 0, mode = 'summary' } = req.query;
+
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
+    const offsetNum = Math.max(0, parseInt(offset));
+    const isFull = mode === 'full';
+
+    // Default to "summary" to keep mobile fast:
+    // - no base64 images
+    // - no extra_works rows (only aggregates)
+    if (!isFull) {
+      const reports = await query(
+        `SELECT
+          r.id,
+          r.report_id,
+          r.created_at,
+          r.date_label,
+          r.address,
+          r.site_name,
+          r.operator_name,
+          r.client_name,
+          r.priority,
+          r.category,
+          r.integrity_hash,
+          COUNT(e.id) as extra_works_count,
+          COALESCE(SUM(e.estimated_cost), 0) as extra_works_total
+        FROM reports r
+        LEFT JOIN extra_works e ON e.report_id = r.id
+        WHERE r.user_id = ?
+        GROUP BY r.id
+        ORDER BY r.created_at DESC
+        LIMIT ? OFFSET ?`,
+        [userId, limitNum, offsetNum]
+      );
+
+      const sanitized = reports.map((r) => ({
+        ...r,
+        // Keep a stable client shape; full report can be fetched by id on demand.
+        coordinates: '',
+        accuracy: null,
+        locationSource: 'unavailable',
+        description: '',
+        imageDataUrl: '',
+        clientSignature: '',
+        extraWorks: [],
+        extraWorksCount: Number(r.extraWorksCount || 0),
+        extraWorksTotal: Number(r.extraWorksTotal || 0),
+      }));
+
+      return res.json({
+        success: true,
+        data: { reports: sanitized, mode: 'summary' }
+      });
+    }
+
     const reports = await query(
-      `SELECT * FROM reports 
-       WHERE user_id = ? 
-       ORDER BY created_at DESC 
+      `SELECT * FROM reports
+       WHERE user_id = ?
+       ORDER BY created_at DESC
        LIMIT ? OFFSET ?`,
-      [userId, parseInt(limit), parseInt(offset)]
+      [userId, limitNum, offsetNum]
     );
-    
+
     // Pour chaque rapport, récupérer les travaux supplémentaires
     for (const report of reports) {
       const extraWorks = await query(
@@ -33,7 +85,7 @@ router.get('/', async (req, res) => {
     
     res.json({
       success: true,
-      data: { reports }
+      data: { reports, mode: 'full' }
     });
     
   } catch (error) {

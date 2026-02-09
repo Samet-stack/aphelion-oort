@@ -47,6 +47,9 @@ export interface ApiReport {
   category?: string;
   integrityHash?: string;
   clientSignature?: string;
+  // Summary mode (fast list): aggregated extras without fetching all rows.
+  extraWorksCount?: number;
+  extraWorksTotal?: number;
   extraWorks: Array<{
     id: string;
     description: string;
@@ -201,7 +204,7 @@ export const authApi = {
 // Reports API
 export const reportsApi = {
   getAll: async (): Promise<ApiReport[]> => {
-    const response = await fetchWithAuth('/reports');
+    const response = await fetchWithAuth('/reports?mode=summary');
     if (response.success && response.data) {
       return response.data.reports;
     }

@@ -1,428 +1,747 @@
 import { jsPDF } from 'jspdf';
 
 export interface ReportPDFData {
-    imageDataUrl: string;
-    address: string;
+  imageDataUrl: string;
+  address: string;
+  description: string;
+  date: string;
+  coordinates: string;
+  accuracy?: number | null;
+  locationSource?: 'gps' | 'demo' | 'unavailable';
+  reportId?: string;
+  companyName?: string;
+  reportTitle?: string;
+  productName?: string;
+  logoUrl?: string | null;
+  siteName?: string;
+  operatorName?: string;
+  clientName?: string;
+  priority?: 'low' | 'medium' | 'high';
+  category?: string;
+  integrityHash?: string;
+  extraWorks?: Array<{
+    id: string;
     description: string;
-    date: string;
-    coordinates: string;
-    accuracy?: number | null;
-    locationSource?: 'gps' | 'demo' | 'unavailable';
-    reportId?: string;
-    companyName?: string;
-    reportTitle?: string;
-    productName?: string;
-    logoUrl?: string | null;
-    // Nouveaux champs
-    siteName?: string;
-    operatorName?: string;
-    clientName?: string;
-    priority?: 'low' | 'medium' | 'high';
-    category?: string;
-    integrityHash?: string;
-    extraWorks?: Array<{
-        id: string;
-        description: string;
-        estimatedCost: number;
-        urgency: 'low' | 'medium' | 'high';
-        category: string;
-    }>;
-    clientSignature?: string;
+    estimatedCost: number;
+    urgency: 'low' | 'medium' | 'high';
+    category: string;
+  }>;
+  clientSignature?: string;
 }
 
-// Palette professionnelle
 const palette = {
-    primary: [26, 54, 93],      // Bleu marine foncé
-    secondary: [201, 162, 99],   // Or/Doré
-    accent: [220, 53, 69],       // Rouge pour urgent
-    success: [40, 167, 69],      // Vert validation
-    dark: [33, 37, 41],          // Noir texte
-    gray: [108, 117, 125],       // Gris secondaire
-    lightGray: [233, 236, 239],  // Gris clair fond
-    white: [255, 255, 255],
+  primary: [26, 54, 93],
+  secondary: [201, 162, 99],
+  accent: [220, 53, 69],
+  success: [40, 167, 69],
+  warning: [255, 193, 7],
+  dark: [33, 37, 41],
+  gray: [108, 117, 125],
+  line: [220, 223, 228],
+  surface: [248, 249, 251],
+  surfaceAlt: [242, 244, 248],
+  white: [255, 255, 255],
+} as const;
+
+const setFill = (doc: jsPDF, c: readonly number[]) => doc.setFillColor(c[0], c[1], c[2]);
+const setDraw = (doc: jsPDF, c: readonly number[]) => doc.setDrawColor(c[0], c[1], c[2]);
+const setText = (doc: jsPDF, c: readonly number[]) => doc.setTextColor(c[0], c[1], c[2]);
+
+type ImageSource = {
+  dataUrl: string;
+  format: 'PNG' | 'JPEG';
 };
 
-// Helpers pour les couleurs
-const setFillColor = (doc: jsPDF, color: number[]) => doc.setFillColor(color[0], color[1], color[2]);
-const setDrawColor = (doc: jsPDF, color: number[]) => doc.setDrawColor(color[0], color[1], color[2]);
-const setTextColor = (doc: jsPDF, color: number[]) => doc.setTextColor(color[0], color[1], color[2]);
+const getImageFormat = (dataUrl: string): ImageSource['format'] | null => {
+  if (dataUrl.startsWith('data:image/png')) return 'PNG';
+  if (dataUrl.startsWith('data:image/jpeg') || dataUrl.startsWith('data:image/jpg')) return 'JPEG';
+  return null;
+};
 
-// Détection format image
-const getImageFormat = (dataUrl: string): 'PNG' | 'JPEG' | null => {
-    if (dataUrl.startsWith('data:image/png')) return 'PNG';
-    if (dataUrl.startsWith('data:image/jpeg') || dataUrl.startsWith('data:image/jpg')) return 'JPEG';
+const toDataUrl = async (url: string): Promise<string | null> => {
+  if (typeof fetch === 'undefined') return null;
+  const response = await fetch(url);
+  if (!response.ok) return null;
+  const blob = await response.blob();
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('Image load failed'));
+    reader.readAsDataURL(blob);
+  });
+};
+
+const resolveImageSource = async (value?: string | null): Promise<ImageSource | null> => {
+  if (!value) return null;
+  if (value.startsWith('data:image/')) {
+    const format = getImageFormat(value);
+    return format ? { dataUrl: value, format } : null;
+  }
+  try {
+    const dataUrl = await toDataUrl(value);
+    if (!dataUrl) return null;
+    const format = getImageFormat(dataUrl);
+    return format ? { dataUrl, format } : null;
+  } catch {
     return null;
+  }
 };
 
-// Note: Fonction disponible pour futures améliorations (logo externe)
-// const toDataUrl = async (url: string): Promise<string | null> => { ... };
+const formatAccuracy = (value?: number | null) => {
+  if (value === undefined || value === null || Number.isNaN(value)) return 'non disponible';
+  return `± ${Math.round(value)} m`;
+};
 
-export const generatePremiumPDF = async (data: ReportPDFData) => {
-    const doc = new jsPDF({
-        unit: 'mm',
-        format: 'a4',
-        orientation: 'portrait'
-    });
+const formatLocationSource = (source?: ReportPDFData['locationSource']) => {
+  if (source === 'gps') return 'GPS OK';
+  if (source === 'demo') return 'Mode démo';
+  return 'GPS indisponible';
+};
 
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const margin = 15;
-    const contentWidth = pageWidth - margin * 2;
+const priorityMeta = (priority?: ReportPDFData['priority']) => {
+  if (priority === 'high') return { label: 'PRIORITÉ HAUTE', color: palette.accent };
+  if (priority === 'medium') return { label: 'PRIORITÉ MOYENNE', color: palette.warning };
+  if (priority === 'low') return { label: 'PRIORITÉ FAIBLE', color: palette.success };
+  return null;
+};
 
-    // === PAGE 1 ===
-    let currentY = margin;
+const categoryLabel = (category?: string) => {
+  if (!category) return null;
+  const map: Record<string, string> = {
+    safety: 'Sécurité',
+    progress: 'Avancement',
+    anomaly: 'Anomalie',
+    other: 'Autre',
+  };
+  return map[category] || category;
+};
 
-    // --- HEADER PREMIUM ---
-    // Bandeau haut bleu marine
-    setFillColor(doc, palette.primary);
-    doc.rect(0, 0, pageWidth, 35, 'F');
+const cardStyle = {
+  minHeight: 58,
+  paddingX: 12,
+  labelY: 18,
+  bottomPadding: 14,
+};
 
-    // Logo/Brand
-    setTextColor(doc, palette.white);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(22);
-    doc.text('SITEFLOW', margin, 15);
-    
+const cardFontSizes = [10, 9, 8] as const;
+
+const getCardMetrics = (fontSize: number) => {
+  const lineHeight = Math.round(fontSize * 1.2);
+  const valueY = 34 + (fontSize - 8);
+  return { lineHeight, valueY };
+};
+
+const measureInfoCard = (doc: jsPDF, value: string, width: number, maxHeight: number) => {
+  for (const fontSize of cardFontSizes) {
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.text('Rapport de Contrôle et d\'Inspection', margin, 22);
-    
-    // Badge de certification (coin droit)
-    const badgeWidth = 45;
-    const badgeX = pageWidth - margin - badgeWidth;
-    
-    // Cercle de certification
-    setDrawColor(doc, palette.secondary);
-    setTextColor(doc, palette.secondary);
-    doc.setLineWidth(0.5);
-    doc.circle(badgeX + 5, 12, 3, 'S');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.text('CERTIFIE', badgeX + 10, 14);
-    
-    // ID Rapport
-    setTextColor(doc, palette.white);
+    doc.setFontSize(fontSize);
+    const { lineHeight, valueY } = getCardMetrics(fontSize);
+    const lines = doc.splitTextToSize(value, width - cardStyle.paddingX * 2);
+    const contentHeight = valueY + Math.max(0, lines.length - 1) * lineHeight + cardStyle.bottomPadding;
+    const height = Math.max(cardStyle.minHeight, contentHeight);
+    if (height <= maxHeight) {
+      return { lines, height, fontSize, lineHeight, valueY };
+    }
+  }
+
+  const fontSize = cardFontSizes[cardFontSizes.length - 1];
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(fontSize);
+  const { lineHeight, valueY } = getCardMetrics(fontSize);
+  const lines = doc.splitTextToSize(value, width - cardStyle.paddingX * 2);
+  const contentHeight = valueY + Math.max(0, lines.length - 1) * lineHeight + cardStyle.bottomPadding;
+  const height = Math.max(cardStyle.minHeight, contentHeight);
+  return { lines, height, fontSize, lineHeight, valueY };
+};
+
+const drawInfoCard = (
+  doc: jsPDF,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  label: string,
+  lines: string[],
+  fontSize: number,
+  valueY: number
+) => {
+  setFill(doc, palette.surface);
+  setDraw(doc, palette.line);
+  doc.roundedRect(x, y, width, height, 10, 10, 'FD');
+
+  setText(doc, palette.gray);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.text(label.toUpperCase(), x + cardStyle.paddingX, y + cardStyle.labelY);
+
+  setText(doc, palette.dark);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(fontSize);
+  doc.text(lines, x + cardStyle.paddingX, y + valueY);
+};
+
+const drawChip = (
+  doc: jsPDF,
+  x: number,
+  y: number,
+  text: string,
+  opts: { fill: readonly number[]; textColor?: readonly number[] }
+) => {
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+
+  const paddingX = 10;
+  const paddingY = 6;
+  const width = doc.getTextWidth(text) + paddingX * 2;
+  const height = paddingY * 2 + 8;
+
+  setFill(doc, opts.fill);
+  doc.roundedRect(x, y, width, height, height / 2, height / 2, 'F');
+
+  setText(doc, opts.textColor ?? palette.white);
+  doc.text(text, x + width / 2, y + height / 2 + 3, { align: 'center' });
+
+  return width;
+};
+
+const drawSectionTitle = (doc: jsPDF, x: number, y: number, title: string) => {
+  setText(doc, palette.dark);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.text(title, x, y);
+
+  setDraw(doc, palette.secondary);
+  doc.setLineWidth(2);
+  doc.line(x, y + 6, x + 72, y + 6);
+};
+
+const stripAppendedSections = (value: string) => {
+  // Legacy cleanup: older versions used to append TS/certification blocks inside description.
+  // Those are now rendered via dedicated fields in the PDF.
+  const markers = [
+    '\n\n--- TRAVAUX SUPPLEMENTAIRES ---\n',
+    '\n\n--- TRAVAUX SUPPLÉMENTAIRES ---\n',
+    '\n\n--- CERTIFICATION ---\n',
+  ];
+
+  let cutIndex = -1;
+  for (const marker of markers) {
+    const idx = value.indexOf(marker);
+    if (idx >= 0 && (cutIndex === -1 || idx < cutIndex)) {
+      cutIndex = idx;
+    }
+  }
+
+  return (cutIndex >= 0 ? value.slice(0, cutIndex) : value).trim();
+};
+
+const openEndedDescription = (description: string) => {
+  const cleaned = stripAppendedSections(description || '');
+  return cleaned || 'Aucune description fournie.';
+};
+
+export const generatePremiumPDF = async (
+  data: ReportPDFData
+): Promise<{ blob: Blob; filename: string }> => {
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 46;
+  const headerHeight = 102;
+
+  const reportTitle = data.reportTitle ?? 'Rapport de chantier';
+  const companyName = data.companyName ?? 'Entreprise';
+  const productName = data.productName ?? 'SiteFlow Pro';
+  const reportId = data.reportId ?? 'RPT-0001';
+  const siteName = data.siteName ?? '';
+  const clientName = data.clientName ?? '';
+
+  const priority = priorityMeta(data.priority);
+  const category = categoryLabel(data.category);
+  const logoData = await resolveImageSource(data.logoUrl);
+
+  // ======================
+  // PAGE 1: HEADER
+  // ======================
+  setFill(doc, palette.primary);
+  doc.rect(0, 0, pageWidth, headerHeight, 'F');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(20);
+  setText(doc, palette.white);
+  doc.text(reportTitle, margin, 50);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  setText(doc, [210, 214, 220]);
+  const subtitleParts = [siteName, clientName].filter(Boolean);
+  const subtitle = subtitleParts.length > 0 ? subtitleParts.join('  •  ') : `Généré via ${productName}`;
+  doc.text(subtitle, margin, 72);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  setText(doc, [210, 214, 220]);
+  doc.text(companyName, pageWidth - margin, 28, { align: 'right' });
+
+  if (logoData) {
+    try {
+      const logoSize = 26;
+      doc.addImage(logoData.dataUrl, logoData.format, pageWidth - margin - logoSize, 38, logoSize, logoSize);
+    } catch {
+      // Ignore logo rendering errors to keep export working.
+    }
+  }
+
+  // Badges (Réf + date)
+  const idBadgeText = reportId;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  const idBadgeWidth = doc.getTextWidth(idBadgeText) + 18;
+  const badgeX = pageWidth - margin - idBadgeWidth - (logoData ? 34 : 0);
+
+  setFill(doc, palette.secondary);
+  doc.roundedRect(badgeX, 66, idBadgeWidth, 20, 8, 8, 'F');
+  setText(doc, [25, 25, 25]);
+  doc.text(idBadgeText, badgeX + idBadgeWidth / 2, 80, { align: 'center' });
+
+  // Chips (priorité + source localisation)
+  let chipX = margin;
+  const chipY = headerHeight - 26;
+  if (priority) {
+    chipX += drawChip(doc, chipX, chipY, priority.label, { fill: priority.color }) + 8;
+  }
+  chipX += drawChip(doc, chipX, chipY, formatLocationSource(data.locationSource), { fill: [54, 82, 125] }) + 8;
+  if (category) {
+    drawChip(doc, chipX, chipY, category.toUpperCase(), { fill: [40, 48, 58] });
+  }
+
+  // Accent line
+  setDraw(doc, palette.secondary);
+  doc.setLineWidth(2);
+  doc.line(margin, headerHeight, margin + 86, headerHeight);
+
+  // ======================
+  // INFO CARDS
+  // ======================
+  const cardTop = headerHeight + 18;
+  const gap = 12;
+  const cardWidth = (pageWidth - margin * 2 - gap * 2) / 3;
+  const cardMaxHeight = 92;
+
+  const dateCard = measureInfoCard(doc, data.date, cardWidth, cardMaxHeight);
+  const locationCard = measureInfoCard(doc, data.address, cardWidth, cardMaxHeight);
+  const coordsLine = `${data.coordinates || 'Non capturées'}\nPrécision: ${formatAccuracy(data.accuracy)}`;
+  const coordsCard = measureInfoCard(doc, coordsLine, cardWidth, cardMaxHeight);
+
+  const cardHeight = Math.max(dateCard.height, locationCard.height, coordsCard.height);
+
+  drawInfoCard(doc, margin, cardTop, cardWidth, cardHeight, 'Date', dateCard.lines, dateCard.fontSize, dateCard.valueY);
+  drawInfoCard(
+    doc,
+    margin + cardWidth + gap,
+    cardTop,
+    cardWidth,
+    cardHeight,
+    'Adresse',
+    locationCard.lines,
+    locationCard.fontSize,
+    locationCard.valueY
+  );
+  drawInfoCard(
+    doc,
+    margin + (cardWidth + gap) * 2,
+    cardTop,
+    cardWidth,
+    cardHeight,
+    'GPS',
+    coordsCard.lines,
+    coordsCard.fontSize,
+    coordsCard.valueY
+  );
+
+  // ======================
+  // PHOTO
+  // ======================
+  const imageTop = cardTop + cardHeight + 16;
+  const baseImageHeight = 240;
+  let imageHeight = baseImageHeight;
+  const imageWidth = pageWidth - margin * 2;
+
+  const mainImage = await resolveImageSource(data.imageDataUrl);
+  if (mainImage) {
+    try {
+      const imageProps = doc.getImageProperties(mainImage.dataUrl);
+      const imageRatio = imageProps.width / imageProps.height;
+      if (imageRatio < 0.85) imageHeight = 320;
+      else if (imageRatio < 1) imageHeight = 280;
+    } catch {
+      imageHeight = baseImageHeight;
+    }
+  }
+
+  setFill(doc, palette.surfaceAlt);
+  doc.rect(margin, imageTop, imageWidth, imageHeight, 'F');
+
+  if (mainImage) {
+    try {
+      const imageProps = doc.getImageProperties(mainImage.dataUrl);
+      const imageRatio = imageProps.width / imageProps.height;
+      const boxRatio = imageWidth / imageHeight;
+
+      let drawWidth = imageWidth;
+      let drawHeight = imageHeight;
+      let drawX = margin;
+      let drawY = imageTop;
+
+      if (imageRatio > boxRatio) {
+        drawHeight = imageWidth / imageRatio;
+        drawY = imageTop + (imageHeight - drawHeight) / 2;
+      } else {
+        drawWidth = imageHeight * imageRatio;
+        drawX = margin + (imageWidth - drawWidth) / 2;
+      }
+
+      doc.addImage(mainImage.dataUrl, mainImage.format, drawX, drawY, drawWidth, drawHeight);
+    } catch {
+      setText(doc, [220, 220, 220]);
+      doc.setFontSize(11);
+      doc.text('Image indisponible', margin + 16, imageTop + 32);
+    }
+  }
+
+  setDraw(doc, palette.line);
+  doc.rect(margin, imageTop, imageWidth, imageHeight);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  setText(doc, palette.gray);
+  doc.text(`Coordonnées: ${data.coordinates || 'Non capturées'}`, margin, imageTop + imageHeight + 16);
+  doc.text(`Précision: ${formatAccuracy(data.accuracy)}`, pageWidth - margin, imageTop + imageHeight + 16, {
+    align: 'right',
+  });
+
+  // ======================
+  // OBSERVATION + SYNTHÈSE
+  // ======================
+  const sectionTop = imageTop + imageHeight + 30;
+  const columnGap = 16;
+  const leftWidth = (pageWidth - margin * 2 - columnGap) * 0.62;
+  const rightWidth = (pageWidth - margin * 2 - columnGap) - leftWidth;
+  const lineHeight = 12;
+
+  const descriptionText = openEndedDescription(data.description);
+  const descriptionLines = doc.splitTextToSize(descriptionText, leftWidth - 28);
+  const footerReserve = 126;
+  const maxDescriptionHeight = Math.max(90, pageHeight - sectionTop - footerReserve);
+  const maxLines = Math.max(1, Math.floor((maxDescriptionHeight - 52) / lineHeight));
+  const primaryLines = descriptionLines.slice(0, maxLines);
+  const overflowLines = descriptionLines.slice(maxLines);
+  const minDescriptionHeight = 110;
+
+  const summaryLines = [
+    siteName ? `Chantier: ${siteName}` : null,
+    data.operatorName ? `Opérateur: ${data.operatorName}` : null,
+    clientName ? `Client: ${clientName}` : null,
+    `Source: ${formatLocationSource(data.locationSource)}`,
+    `Précision: ${formatAccuracy(data.accuracy)}`,
+    category ? `Catégorie: ${category}` : null,
+    data.priority ? `Priorité: ${priority?.label.replace('PRIORITÉ ', '') || ''}` : null,
+    `Réf: ${reportId}`,
+    data.integrityHash ? 'Certification: OK (SHA-256)' : 'Certification: non disponible',
+    data.integrityHash ? `Hash: ${data.integrityHash.substring(0, 24)}...` : null,
+  ].filter(Boolean) as string[];
+
+  const summaryMaxWidth = rightWidth - 28;
+  const summarySizes = [9, 8, 7] as const;
+  let summaryFontSize = summarySizes[summarySizes.length - 1];
+  let summaryLineHeight = Math.round(summaryFontSize * 1.4);
+  let summaryWrapped: string[] = [];
+  let summaryHeightNeeded = 0;
+
+  for (const size of summarySizes) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(size);
+    const wrapped = summaryLines.flatMap((line) => doc.splitTextToSize(`- ${line}`, summaryMaxWidth));
+    const lh = Math.round(size * 1.4);
+    const height = wrapped.length * lh + 26;
+    if (height <= maxDescriptionHeight) {
+      summaryFontSize = size;
+      summaryLineHeight = lh;
+      summaryWrapped = wrapped;
+      summaryHeightNeeded = height;
+      break;
+    }
+  }
+
+  if (summaryWrapped.length === 0) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(summaryFontSize);
+    summaryWrapped = summaryLines.flatMap((line) => doc.splitTextToSize(`- ${line}`, summaryMaxWidth));
+    summaryHeightNeeded = summaryWrapped.length * summaryLineHeight + 26;
+  }
+
+  const descriptionHeight = Math.min(
+    Math.max(minDescriptionHeight, primaryLines.length * lineHeight + 52, summaryHeightNeeded),
+    maxDescriptionHeight
+  );
+
+  // Left: Observation
+  setFill(doc, [250, 250, 252]);
+  setDraw(doc, palette.line);
+  doc.roundedRect(margin, sectionTop, leftWidth, descriptionHeight, 12, 12, 'FD');
+  drawSectionTitle(doc, margin + 14, sectionTop + 22, 'Observation');
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  setText(doc, palette.dark);
+  doc.text(primaryLines, margin + 14, sectionTop + 40);
+
+  // Right: Synthèse
+  setFill(doc, [245, 245, 248]);
+  setDraw(doc, palette.line);
+  doc.roundedRect(margin + leftWidth + columnGap, sectionTop, rightWidth, descriptionHeight, 12, 12, 'FD');
+  drawSectionTitle(doc, margin + leftWidth + columnGap + 14, sectionTop + 22, 'Synthèse');
+
+  const summaryAvailableHeight = Math.max(30, descriptionHeight - 54);
+  if (summaryWrapped.length * summaryLineHeight > summaryAvailableHeight) {
+    const trimmedLines: string[] = [];
+    let currentHeight = 0;
+    for (const line of summaryWrapped) {
+      if (currentHeight + summaryLineHeight > summaryAvailableHeight) break;
+      trimmedLines.push(line);
+      currentHeight += summaryLineHeight;
+    }
+    summaryWrapped = trimmedLines;
+  }
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(summaryFontSize);
+  setText(doc, palette.gray);
+  summaryWrapped.forEach((line, index) => {
+    doc.text(line, margin + leftWidth + columnGap + 14, sectionTop + 44 + index * summaryLineHeight);
+  });
+
+  // ======================
+  // SIGNATURES
+  // ======================
+  const signatureTop = sectionTop + descriptionHeight + 26;
+  const signatureWidth = (pageWidth - margin * 2 - 24) / 2;
+
+  setDraw(doc, palette.line);
+  doc.setLineWidth(1);
+  doc.line(margin, signatureTop + 36, margin + signatureWidth, signatureTop + 36);
+  doc.line(margin + signatureWidth + 24, signatureTop + 36, pageWidth - margin, signatureTop + 36);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  setText(doc, palette.gray);
+  doc.text('Chef de chantier / Opérateur', margin, signatureTop + 52);
+  doc.text('Client / Maître d’ouvrage', margin + signatureWidth + 24, signatureTop + 52);
+
+  // Names (optional)
+  const leftName = data.operatorName || '';
+  const rightName = data.clientName || '';
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  setText(doc, palette.dark);
+  if (leftName) doc.text(leftName, margin, signatureTop + 30);
+  if (rightName && !data.clientSignature) doc.text(rightName, margin + signatureWidth + 24, signatureTop + 30);
+
+  // Client signature (optional)
+  if (data.clientSignature) {
+    const sigImage = await resolveImageSource(data.clientSignature);
+    if (sigImage) {
+      try {
+        doc.addImage(sigImage.dataUrl, sigImage.format, margin + signatureWidth + 24, signatureTop + 10, 120, 24);
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  // ======================
+  // OBSERVATION (SUITE)
+  // ======================
+  const continuationLineHeight = 12;
+  const continuationTop = 92;
+  const continuationHeight = pageHeight - continuationTop - 84;
+  const continuationLinesPerPage = Math.max(10, Math.floor(continuationHeight / continuationLineHeight));
+  const extraPages = Math.ceil(overflowLines.length / continuationLinesPerPage);
+
+  if (overflowLines.length > 0) {
+    for (let pageIndex = 0; pageIndex < extraPages; pageIndex += 1) {
+      const chunk = overflowLines.slice(
+        pageIndex * continuationLinesPerPage,
+        (pageIndex + 1) * continuationLinesPerPage
+      );
+      doc.addPage();
+
+      setFill(doc, palette.primary);
+      doc.rect(0, 0, pageWidth, 64, 'F');
+      setText(doc, palette.white);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.text('Observation (suite)', margin, 40);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      setText(doc, [210, 214, 220]);
+      doc.text(`${siteName || reportTitle}  •  ${reportId}`, margin, 56);
+
+      setText(doc, palette.dark);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.text(chunk, margin, continuationTop);
+    }
+  }
+
+  // ======================
+  // ANNEXE: TRAVAUX SUPP.
+  // ======================
+  if (data.extraWorks && data.extraWorks.length > 0) {
+    const items = data.extraWorks;
+    let y = 92;
+
+    const addExtraWorksPage = (pageTitle: string) => {
+      doc.addPage();
+      setFill(doc, palette.primary);
+      doc.rect(0, 0, pageWidth, 64, 'F');
+      setText(doc, palette.white);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.text(pageTitle, margin, 40);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      setText(doc, [210, 214, 220]);
+      doc.text(`${siteName || reportTitle}  •  ${reportId}`, margin, 56);
+      y = 92;
+    };
+
+    addExtraWorksPage('Annexe A · Travaux supplémentaires');
+
+    const tableX = margin;
+    const tableW = pageWidth - margin * 2;
+    const colW = {
+      desc: tableW * 0.56,
+      cat: tableW * 0.16,
+      urg: tableW * 0.12,
+      cost: tableW * 0.16,
+    };
+
+    const drawTableHeader = () => {
+      setFill(doc, palette.primary);
+      doc.rect(tableX, y, tableW, 24, 'F');
+      setText(doc, palette.white);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.text('Description', tableX + 10, y + 16);
+      doc.text('Catégorie', tableX + colW.desc + 10, y + 16);
+      doc.text('Urgence', tableX + colW.desc + colW.cat + 10, y + 16);
+      doc.text('Estimation', tableX + tableW - 10, y + 16, { align: 'right' });
+      y += 24;
+    };
+
+    drawTableHeader();
+
+    doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
-    doc.text(`REF: ${data.reportId || 'N/A'}`, badgeX, 22);
-    doc.text(`Date: ${new Date().toLocaleDateString('fr-FR')}`, badgeX, 27);
 
-    currentY = 45;
+    let total = 0;
+    const rowH = 26;
 
-    // --- SECTION IDENTIFICATION ---
-    // Titre section
-    setTextColor(doc, palette.primary);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
-    doc.text('1. IDENTIFICATION DU CHANTIER', margin, currentY);
-    
-    // Ligne or sous le titre
-    setDrawColor(doc, palette.secondary);
-    doc.setLineWidth(0.8);
-    doc.line(margin, currentY + 2, margin + 60, currentY + 2);
-    
-    currentY += 12;
+    const urgencyLabel: Record<'low' | 'medium' | 'high', string> = {
+      low: 'FAIBLE',
+      medium: 'MOYENNE',
+      high: 'HAUTE',
+    };
+    const urgencyColor: Record<'low' | 'medium' | 'high', readonly number[]> = {
+      low: palette.success,
+      medium: palette.warning,
+      high: palette.accent,
+    };
 
-    // Tableau d'identification
-    const infoRows = [
-        ['CHANTIER', data.siteName || 'Non spécifié'],
-        ['CLIENT', data.clientName || 'Non spécifié'],
-        ['OPÉRATEUR', data.operatorName || data.companyName || 'Non spécifié'],
-        ['ADRESSE', data.address],
-        ['COORDONNÉES GPS', data.coordinates],
-        ['PRÉCISION', data.accuracy ? `±${Math.round(data.accuracy)}m` : 'Non disponible'],
-        ['DATE / HEURE', data.date],
-    ];
+    items.forEach((ts, idx) => {
+      if (y + rowH + 60 > pageHeight - margin) {
+        addExtraWorksPage('Annexe A · Travaux supplémentaires (suite)');
+        drawTableHeader();
+      }
 
-    // Fond gris clair pour le tableau
-    setFillColor(doc, palette.lightGray);
-    doc.rect(margin, currentY - 5, contentWidth, infoRows.length * 8 + 5, 'F');
+      const isEven = idx % 2 === 0;
+      setFill(doc, isEven ? palette.white : palette.surfaceAlt);
+      setDraw(doc, palette.line);
+      doc.rect(tableX, y, tableW, rowH, 'FD');
 
-    setTextColor(doc, palette.dark);
-    doc.setFontSize(10);
-    
-    infoRows.forEach(([label, value], index) => {
-        const y = currentY + index * 8;
-        
-        // Label en gras
-        doc.setFont('helvetica', 'bold');
-        doc.text(`${label}:`, margin + 3, y);
-        
-        // Valeur
-        doc.setFont('helvetica', 'normal');
-        const labelWidth = doc.getTextWidth(`${label}:`);
-        
-        // Gestion du texte long (adresse)
-        if (value.length > 50) {
-            const lines = doc.splitTextToSize(value, contentWidth - labelWidth - 10);
-            doc.text(lines, margin + 5 + labelWidth, y);
-        } else {
-            doc.text(value, margin + 5 + labelWidth, y);
-        }
+      const desc = ts.description.length > 80 ? `${ts.description.slice(0, 80)}...` : ts.description;
+      setText(doc, palette.dark);
+      doc.text(desc, tableX + 10, y + 16);
+
+      setText(doc, palette.gray);
+      doc.text((ts.category || '').toUpperCase(), tableX + colW.desc + 10, y + 16);
+
+      setText(doc, urgencyColor[ts.urgency]);
+      doc.setFont('helvetica', 'bold');
+      doc.text(urgencyLabel[ts.urgency], tableX + colW.desc + colW.cat + 10, y + 16);
+      doc.setFont('helvetica', 'normal');
+
+      setText(doc, palette.dark);
+      doc.text(`${ts.estimatedCost.toLocaleString('fr-FR')} € HT`, tableX + tableW - 10, y + 16, {
+        align: 'right',
+      });
+
+      total += ts.estimatedCost;
+      y += rowH;
     });
 
-    currentY += infoRows.length * 8 + 15;
-
-    // --- PHOTO PRINCIPALE ---
-    if (data.imageDataUrl) {
-        setTextColor(doc, palette.primary);
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(14);
-        doc.text('2. DOCUMENTATION PHOTOGRAPHIQUE', margin, currentY);
-        
-        setDrawColor(doc, palette.secondary);
-        doc.line(margin, currentY + 2, margin + 75, currentY + 2);
-        
-        currentY += 10;
-        
-        // Cadre photo avec ombre
-        const imgWidth = contentWidth;
-        const imgHeight = 80;
-        
-        // Ombre
-        setFillColor(doc, [200, 200, 200]);
-        doc.rect(margin + 1, currentY + 1, imgWidth, imgHeight, 'F');
-        
-        // Bordure
-        setDrawColor(doc, palette.primary);
-        doc.setLineWidth(0.5);
-        doc.rect(margin, currentY, imgWidth, imgHeight, 'S');
-        
-        try {
-            const format = getImageFormat(data.imageDataUrl);
-            if (format) {
-                // Centrer l'image dans le cadre
-                const imgProps = doc.getImageProperties(data.imageDataUrl);
-                const ratio = imgProps.width / imgProps.height;
-                let drawWidth = imgWidth - 4;
-                let drawHeight = drawWidth / ratio;
-                
-                if (drawHeight > imgHeight - 4) {
-                    drawHeight = imgHeight - 4;
-                    drawWidth = drawHeight * ratio;
-                }
-                
-                const x = margin + 2 + (imgWidth - 4 - drawWidth) / 2;
-                const y = currentY + 2 + (imgHeight - 4 - drawHeight) / 2;
-                
-                doc.addImage(data.imageDataUrl, format, x, y, drawWidth, drawHeight);
-            }
-        } catch (err) {
-            // Fallback texte
-            setTextColor(doc, palette.gray);
-            doc.setFontSize(10);
-            doc.text('Image non disponible', margin + imgWidth/2 - 20, currentY + imgHeight/2);
-        }
-        
-        // Légende
-        currentY += imgHeight + 5;
-        setTextColor(doc, palette.gray);
-        doc.setFontSize(8);
-        doc.text(`Photo n°1 - Prise le ${data.date} - Localisation: ${data.coordinates}`, margin, currentY);
-        
-        currentY += 15;
+    // Total row
+    if (y + 48 > pageHeight - margin) {
+      addExtraWorksPage('Annexe A · Travaux supplémentaires (suite)');
+      drawTableHeader();
     }
 
-    // --- OBSERVATIONS ---
-    setTextColor(doc, palette.primary);
+    setFill(doc, [238, 240, 245]);
+    setDraw(doc, palette.primary);
+    doc.setLineWidth(1);
+    doc.roundedRect(tableX, y + 10, tableW, 34, 10, 10, 'FD');
+    setText(doc, palette.primary);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
-    doc.text('3. OBSERVATIONS ET ANALYSE', margin, currentY);
-    setDrawColor(doc, palette.secondary);
-    doc.line(margin, currentY + 2, margin + 65, currentY + 2);
-    currentY += 10;
-
-    // Zone de texte avec fond
-    setFillColor(doc, [250, 250, 250]);
-    const descLines = doc.splitTextToSize(data.description, contentWidth - 6);
-    const descHeight = Math.max(30, descLines.length * 5 + 6);
-    doc.rect(margin, currentY, contentWidth, descHeight, 'F');
-    setDrawColor(doc, palette.lightGray);
-    doc.rect(margin, currentY, contentWidth, descHeight, 'S');
-    
-    setTextColor(doc, palette.dark);
-    doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-    doc.text(descLines, margin + 3, currentY + 6);
-    
-    currentY += descHeight + 15;
+    doc.text('TOTAL TRAVAUX SUPPLÉMENTAIRES', tableX + 12, y + 32);
+    doc.text(`${total.toLocaleString('fr-FR')} € HT`, tableX + tableW - 12, y + 32, { align: 'right' });
 
-    // --- TRAVAUX SUPPLEMENTAIRES ---
-    if (data.extraWorks && data.extraWorks.length > 0) {
-        setTextColor(doc, palette.primary);
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(14);
-        doc.text('4. TRAVAUX SUPPLÉMENTAIRES', margin, currentY);
-        setDrawColor(doc, palette.secondary);
-        doc.line(margin, currentY + 2, margin + 65, currentY + 2);
-        currentY += 10;
-
-        // Tableau TS
-        const headers = ['Description', 'Catégorie', 'Urgence', 'Estimation'];
-        const colWidths = [contentWidth * 0.45, contentWidth * 0.20, contentWidth * 0.15, contentWidth * 0.20];
-        
-        // Header tableau
-        setFillColor(doc, palette.primary);
-        doc.rect(margin, currentY, contentWidth, 8, 'F');
-        setTextColor(doc, palette.white);
-        doc.setFontSize(9);
-        
-        let xPos = margin;
-        headers.forEach((header, i) => {
-            doc.text(header, xPos + 2, currentY + 5.5);
-            xPos += colWidths[i];
-        });
-        
-        currentY += 8;
-        
-        // Lignes TS
-        let total = 0;
-        data.extraWorks.forEach((ts, index) => {
-            const isEven = index % 2 === 0;
-            setFillColor(doc, isEven ? palette.white : [245, 245, 245]);
-            doc.rect(margin, currentY, contentWidth, 8, 'F');
-            setDrawColor(doc, palette.lightGray);
-            doc.rect(margin, currentY, contentWidth, 8, 'S');
-            
-            setTextColor(doc, palette.dark);
-            doc.setFontSize(8);
-            
-            xPos = margin;
-            
-            // Description (tronquée si trop longue)
-            const desc = ts.description.length > 35 
-                ? ts.description.substring(0, 35) + '...' 
-                : ts.description;
-            doc.text(desc, xPos + 2, currentY + 5);
-            xPos += colWidths[0];
-            
-            // Catégorie
-            doc.text(ts.category.toUpperCase(), xPos + 2, currentY + 5);
-            xPos += colWidths[1];
-            
-            // Urgence avec couleur
-            const urgencyColors = {
-                high: palette.accent,
-                medium: [255, 193, 7], // jaune
-                low: palette.success
-            };
-            const urgencyLabels = { high: 'HAUTE', medium: 'MOYENNE', low: 'FAIBLE' };
-            setTextColor(doc, urgencyColors[ts.urgency]);
-            doc.text(urgencyLabels[ts.urgency], xPos + 2, currentY + 5);
-            setTextColor(doc, palette.dark);
-            xPos += colWidths[2];
-            
-            // Prix
-            doc.text(`${ts.estimatedCost.toLocaleString('fr-FR')} €`, xPos + 2, currentY + 5);
-            
-            total += ts.estimatedCost;
-            currentY += 8;
-        });
-        
-        // Ligne total
-        setFillColor(doc, [240, 240, 240]);
-        doc.rect(margin, currentY, contentWidth, 10, 'F');
-        setDrawColor(doc, palette.primary);
-        doc.setLineWidth(0.5);
-        doc.rect(margin, currentY, contentWidth, 10, 'S');
-        
-        setTextColor(doc, palette.primary);
+    // Certification block (optional)
+    if (data.integrityHash) {
+      const cy = y + 56;
+      if (cy + 54 < pageHeight - margin) {
+        setFill(doc, [240, 248, 240]);
+        setDraw(doc, palette.success);
+        doc.setLineWidth(1);
+        doc.roundedRect(tableX, cy, tableW, 44, 10, 10, 'FD');
+        setText(doc, palette.success);
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(10);
-        doc.text('TOTAL TRAVAUX SUPPLÉMENTAIRES:', margin + 2, currentY + 6.5);
-        doc.text(`${total.toLocaleString('fr-FR')} € HT`, pageWidth - margin - 2, currentY + 6.5, { align: 'right' });
-        
-        currentY += 20;
-    }
-
-    // --- CERTIFICATION ---
-    if (data.integrityHash) {
-        setTextColor(doc, palette.primary);
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(14);
-        doc.text(data.extraWorks ? '5. CERTIFICATION' : '4. CERTIFICATION', margin, currentY);
-        setDrawColor(doc, palette.secondary);
-        doc.line(margin, currentY + 2, margin + 40, currentY + 2);
-        currentY += 10;
-        
-        // Cadre certification
-        setFillColor(doc, [240, 248, 240]);
-        doc.roundedRect(margin, currentY, contentWidth, 25, 3, 3, 'F');
-        setDrawColor(doc, palette.success);
-        doc.setLineWidth(0.5);
-        doc.roundedRect(margin, currentY, contentWidth, 25, 3, 3, 'S');
-        
-        // Icône check
-        setTextColor(doc, palette.success);
-        doc.setFontSize(14);
-        doc.text('✓', margin + 5, currentY + 10);
-        
-        setTextColor(doc, palette.dark);
-        doc.setFontSize(9);
-        doc.text('Ce document est certifié authentique et inaltéré.', margin + 12, currentY + 8);
+        doc.text('CERTIFICATION', tableX + 12, cy + 18);
+        setText(doc, palette.dark);
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(7);
-        doc.text(`Empreinte SHA-256: ${data.integrityHash.substring(0, 40)}...`, margin + 12, currentY + 13);
-        doc.text(`Source: ${data.locationSource === 'gps' ? 'GPS Certifié' : 'Mode Démo'} | Précision: ${data.accuracy ? `±${Math.round(data.accuracy)}m` : 'N/A'}`, margin + 12, currentY + 18);
-        
-        currentY += 35;
-    }
-
-    // --- SIGNATURES ---
-    const signaturesY = pageHeight - 40;
-    
-    setTextColor(doc, palette.primary);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.text('SIGNATURES', margin, signaturesY);
-    
-    // Cadre Chef de chantier
-    const sigBoxWidth = (contentWidth - 10) / 2;
-    
-    setDrawColor(doc, palette.gray);
-    doc.setLineWidth(0.3);
-    doc.rect(margin, signaturesY + 5, sigBoxWidth, 25, 'S');
-    
-    setTextColor(doc, palette.gray);
-    doc.setFontSize(8);
-    doc.text('Chef de Chantier / Opérateur', margin + 2, signaturesY + 10);
-    
-    if (data.operatorName) {
-        setTextColor(doc, palette.dark);
-        doc.setFont('helvetica', 'bold');
         doc.setFontSize(9);
-        doc.text(data.operatorName, margin + 2, signaturesY + 28);
+        doc.text(`SHA-256: ${data.integrityHash.substring(0, 48)}...`, tableX + 12, cy + 34);
+      }
     }
-    
-    // Cadre Client (si signature)
-    doc.rect(margin + sigBoxWidth + 10, signaturesY + 5, sigBoxWidth, 25, 'S');
-    setTextColor(doc, palette.gray);
-    doc.text('Client / Maître d\'Ouvrage', margin + sigBoxWidth + 12, signaturesY + 10);
-    
-    if (data.clientSignature) {
-        try {
-            doc.addImage(data.clientSignature, 'PNG', margin + sigBoxWidth + 12, signaturesY + 12, 30, 15);
-        } catch (e) {
-            setTextColor(doc, palette.success);
-            doc.text('✓ Signé électroniquement', margin + sigBoxWidth + 12, signaturesY + 20);
-        }
-    } else if (data.clientName) {
-        setTextColor(doc, palette.dark);
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(9);
-        doc.text(data.clientName, margin + sigBoxWidth + 12, signaturesY + 28);
-    }
+  }
 
-    // --- FOOTER ---
-    setFillColor(doc, palette.primary);
-    doc.rect(0, pageHeight - 8, pageWidth, 8, 'F');
-    
-    setTextColor(doc, palette.white);
+  // ======================
+  // FOOTERS (ALL PAGES)
+  // ======================
+  const totalPages = doc.getNumberOfPages();
+  for (let pageIndex = 1; pageIndex <= totalPages; pageIndex += 1) {
+    doc.setPage(pageIndex);
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7);
-    doc.text(`Document généré par ${data.productName || 'SiteFlow Pro'} - Page 1/1 - Confidentialité strictement réservée`, margin, pageHeight - 3);
-    doc.text(data.reportId || '', pageWidth - margin, pageHeight - 3, { align: 'right' });
+    doc.setFontSize(8);
+    setText(doc, palette.gray);
+    doc.text('Document confidentiel - usage interne', margin, pageHeight - 24);
+    doc.text(`${productName} • ${reportId}`, pageWidth - margin, pageHeight - 24, { align: 'right' });
+    doc.text(`Page ${pageIndex}/${totalPages}`, pageWidth - margin, pageHeight - 12, { align: 'right' });
+  }
 
-    // Sauvegarde
-    const filename = `Rapport_${data.siteName?.replace(/\s+/g, '_') || 'Chantier'}_${data.reportId?.replace(/-/g, '_') || Date.now()}.pdf`;
-    doc.save(filename);
+  const filename = `Rapport_${(siteName || 'Chantier').replace(/\s+/g, '_')}_${reportId.replace(/-/g, '_')}.pdf`;
+  return { blob: doc.output('blob'), filename };
 };

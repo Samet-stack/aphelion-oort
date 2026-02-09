@@ -120,7 +120,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           const userData = await authApi.getMe();
           setUser(userData);
-          await Promise.all([refreshReports(), loadStats()]);
+          // Keep initial load light for mobile: reports list is fetched on demand (HistoryView).
+          await loadStats();
         } catch (error) {
           // Token invalide
           authApi.logout();
@@ -129,7 +130,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsLoading(false);
     };
     init();
-  }, [loadStats, refreshReports]);
+  }, [loadStats]);
 
   // S'abonner aux changements de l'état offline
   useEffect(() => {
@@ -141,9 +142,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = useCallback(async (email: string, password: string) => {
     const data = await authApi.login(email, password);
-    await Promise.all([refreshReports(), loadStats()]);
+    // Keep login fast: reports list is fetched on demand (HistoryView).
+    await loadStats();
     setUser(data.user);
-  }, [refreshReports, loadStats]);
+  }, [loadStats]);
 
   const register = useCallback(async (data: {
     email: string;

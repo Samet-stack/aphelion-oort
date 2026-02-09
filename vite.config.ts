@@ -5,6 +5,8 @@ import { VitePWA } from 'vite-plugin-pwa'
 // https://vitejs.dev/config/
 export default defineConfig({
     server: {
+        // Needed to access the dev server from a phone on the same Wi‑Fi (e.g. iPhone Safari).
+        host: true,
         // Avoid CORS issues in dev by proxying API calls through Vite.
         proxy: {
             '/api': {

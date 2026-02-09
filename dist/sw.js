@@ -82,18 +82,30 @@ define(['./workbox-5a5d9309'], (function (workbox) { 'use strict';
     "revision": "1872c500de691dce40960bb85481de07"
   }, {
     "url": "index.html",
-    "revision": "fe63a6325172f1bf15e72336dc1cc1e7"
+    "revision": "1951c8633d59ff1906419c6038bdbed1"
   }, {
     "url": "assets/purify.es-C_uT9hQ1.js",
     "revision": null
   }, {
-    "url": "assets/index.es-WXhwZc6m.js",
+    "url": "assets/point-pdf-BDUCzB6L.js",
     "revision": null
   }, {
-    "url": "assets/index-ClPvUEwj.js",
+    "url": "assets/plan-pdf-premium-D39EDZOj.js",
     "revision": null
   }, {
-    "url": "assets/index-B6gfsuao.css",
+    "url": "assets/pdf-premium-CStGZ6hP.js",
+    "revision": null
+  }, {
+    "url": "assets/jspdf.es.min-DhHCe7nl.js",
+    "revision": null
+  }, {
+    "url": "assets/index.es-DtGlzE3s.js",
+    "revision": null
+  }, {
+    "url": "assets/index-Dt3FHqrc.css",
+    "revision": null
+  }, {
+    "url": "assets/index-CX-LVYn8.js",
     "revision": null
   }, {
     "url": "assets/html2canvas.esm-CBrSDip1.js",

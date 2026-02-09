@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { X, ChevronLeft, ChevronRight, Trash2, Edit2 } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Trash2, Edit2, MapPin, FileText } from 'lucide-react';
 import { ApiPlanPoint } from '../services/api';
 import { PlanPointDetailContent } from './PlanPointDetail';
 import { PlanPointFormFields, PlanPointFormData } from './PlanPointForm';
@@ -15,6 +15,9 @@ export interface PlanPointPanelProps {
   onDelete: (pointId: string) => void;
   onEdit: () => void;
   onNavigate: (point: ApiPlanPoint) => void;
+  onFocusPoint?: (point: ApiPlanPoint) => void;
+  onDownloadPointPdf?: (point: ApiPlanPoint) => void;
+  onUpdateStatus?: (pointId: string, status: ApiPlanPoint['status']) => void;
 }
 
 const useIsMobile = () => {
@@ -42,6 +45,9 @@ export const PlanPointPanel: React.FC<PlanPointPanelProps> = ({
   onDelete,
   onEdit,
   onNavigate,
+  onFocusPoint,
+  onDownloadPointPdf,
+  onUpdateStatus,
 }) => {
   const isMobile = useIsMobile();
 
@@ -96,6 +102,12 @@ export const PlanPointPanel: React.FC<PlanPointPanelProps> = ({
   };
 
   const variants = isMobile ? mobileVariants : desktopVariants;
+
+  const statusOptions: Array<{ id: ApiPlanPoint['status']; label: string }> = [
+    { id: 'a_faire', label: 'À faire' },
+    { id: 'en_cours', label: 'En cours' },
+    { id: 'termine', label: 'Terminé' },
+  ];
 
   return (
     <AnimatePresence mode="wait">
@@ -170,6 +182,42 @@ export const PlanPointPanel: React.FC<PlanPointPanelProps> = ({
 
             {/* Body */}
             <div className="plan-panel__body">
+              {mode === 'detail' && point && (
+                <div className="plan-panel__quick">
+                  <div className="plan-panel__quick-actions">
+                    {onFocusPoint && (
+                      <button className="btn btn--ghost" onClick={() => onFocusPoint(point)}>
+                        <MapPin size={16} /> Voir sur le plan
+                      </button>
+                    )}
+                    {onDownloadPointPdf && (
+                      <button className="btn btn--ghost" onClick={() => onDownloadPointPdf(point)}>
+                        <FileText size={16} /> Fiche PDF
+                      </button>
+                    )}
+                  </div>
+
+                  {onUpdateStatus && (
+                    <div className="plan-panel__status-segment" role="group" aria-label="Statut">
+                      {statusOptions.map((opt) => {
+                        const isActive = opt.id === point.status;
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            className={`plan-panel__segment-btn${isActive ? ' plan-panel__segment-btn--active' : ''}`}
+                            onClick={() => onUpdateStatus(point.id, opt.id)}
+                            disabled={isActive}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {mode === 'detail' && point && (
                 <PlanPointDetailContent point={point} />
               )}

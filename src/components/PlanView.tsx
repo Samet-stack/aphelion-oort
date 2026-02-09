@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { ArrowLeft, Plus, Map, Trash2, ZoomIn, ZoomOut, FileText, Loader2, Upload, Camera, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Plus, Map, Trash2, ZoomIn, ZoomOut, FileText, Loader2, Upload, Camera, ChevronRight, ClipboardList, Search, Play, CheckCircle2 } from 'lucide-react';
 import { plansApi, ApiPlan, ApiPlanPoint, ApiPlanListItem } from '../services/api';
 import { PlanPointFormData } from './PlanPointForm';
 import { PlanPointPanel } from './PlanPointPanel';
-import { generatePlanPDFPremium as generatePlanPDF } from '../services/plan-pdf-premium';
 
 interface PlanViewProps {
   onBack: () => void;
@@ -60,7 +59,75 @@ const fileToDataUrl = (file: File, maxW = 2000, maxH = 2000, quality = 0.8): Pro
   });
 };
 
+
+const PinMarker: React.FC<{
+  point: ApiPlanPoint;
+  isSelected: boolean;
+  onClick: (e: React.MouseEvent) => void;
+}> = ({ point, isSelected, onClick }) => {
+  const isProblem = point.status === 'a_faire' || point.category === 'defaut';
+  const color = isProblem ? '#ef4444' : point.status === 'termine' ? '#22c55e' : '#f59e0b';
+
+  return (
+    <div
+      className={`pin-marker ${isSelected ? 'pin-marker--active' : ''} ${isProblem ? 'pin-marker--problem' : ''}`}
+      data-point-id={point.id}
+      style={{
+        left: `${point.positionX}%`,
+        top: `${point.positionY}%`,
+        animation: 'pin-pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards',
+        animationDelay: `${Math.random() * 0.2}s` // Random delay for natural feel
+      }}
+      onClick={onClick}
+      title={`#${point.pointNumber} ${point.title}`}
+    >
+      <div className="pin-svg-wrapper" style={{ transform: 'translate(-50%, -100%)' }}>
+        <svg
+          width="40"
+          height="40"
+          viewBox="0 0 40 40"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          className="pin-svg"
+        >
+          <path
+            d="M20 0C11.1634 0 4 7.16344 4 16C4 26.5 20 40 20 40C20 40 36 26.5 36 16C36 7.16344 28.8366 0 20 0Z"
+            fill={color}
+          />
+          <circle cx="20" cy="16" r="6" fill="#0f172a" fillOpacity="0.3" />
+          <circle cx="20" cy="16" r="3" fill="white" />
+          {isProblem && (
+            <path
+              d="M20 8V18"
+              stroke="white"
+              strokeWidth="2"
+              strokeLinecap="round"
+              style={{ opacity: 0.8 }}
+            />
+          )}
+        </svg>
+        {/* Number Badge */}
+        <div
+          style={{
+            position: 'absolute',
+            top: '5px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            color: 'white',
+            fontSize: '10px',
+            fontWeight: 'bold',
+            textShadow: '0 1px 2px rgba(0,0,0,0.5)'
+          }}
+        >
+          {point.pointNumber}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
+
   // Sub-views
   const [subView, setSubView] = useState<SubView>('LIST');
 
@@ -84,6 +151,12 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
   const [zoom, setZoom] = useState(1);
   const imageRef = useRef<HTMLImageElement>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
+  type ViewerTab = 'PLAN' | 'ACTION';
+  const [viewerTab, setViewerTab] = useState<ViewerTab>('PLAN');
+
+  // Action plan filters
+  const [actionQuery, setActionQuery] = useState('');
+  const [actionCategory, setActionCategory] = useState<'all' | string>('all');
 
   // Click tracking for distinguishing click vs drag
   const mouseDownPos = useRef<{ x: number; y: number } | null>(null);
@@ -122,6 +195,13 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
       setCurrentPlan(plan);
       setSubView('VIEWER');
       setZoom(1);
+      setViewerTab('PLAN');
+      setActionQuery('');
+      setActionCategory('all');
+      setPanelMode('closed');
+      setSelectedPoint(null);
+      setEditingPoint(null);
+      setClickPosition(null);
     } catch (err) {
       console.error('Error loading plan:', err);
       alert('Erreur lors du chargement du plan.');
@@ -168,6 +248,13 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
       setCurrentPlan(plan);
       setSubView('VIEWER');
       setZoom(1);
+      setViewerTab('PLAN');
+      setActionQuery('');
+      setActionCategory('all');
+      setPanelMode('closed');
+      setSelectedPoint(null);
+      setEditingPoint(null);
+      setClickPosition(null);
       // Reset upload form
       setUploadSiteName('');
       setUploadAddress('');
@@ -290,12 +377,75 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
     setPanelMode('detail');
   };
 
+  const handleFocusPoint = (point: ApiPlanPoint) => {
+    // Switch to plan view to make the "subpage to the right" feel connected to the marker.
+    setViewerTab('PLAN');
+    window.setTimeout(() => {
+      const el = document.querySelector(`[data-point-id="${point.id}"]`) as HTMLElement | null;
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+    }, 60);
+  };
+
+  const handleUpdatePointStatus = async (pointId: string, status: ApiPlanPoint['status']) => {
+    if (!currentPlan) return;
+    try {
+      const updated = await plansApi.updatePoint(currentPlan.id, pointId, { status });
+      setCurrentPlan((prev) =>
+        prev ? { ...prev, points: prev.points.map((p) => (p.id === updated.id ? updated : p)) } : null
+      );
+      setSelectedPoint(updated);
+      setEditingPoint(null);
+      setPanelMode('detail');
+    } catch (err) {
+      console.error('Error updating status:', err);
+      alert('Erreur lors de la mise a jour du statut.');
+    }
+  };
+
+  const handleDownloadPointPdf = async (point: ApiPlanPoint) => {
+    if (!currentPlan) return;
+    try {
+      const { generatePointPDF } = await import('../services/point-pdf');
+      const { blob, filename } = await generatePointPDF(currentPlan, point);
+      const blobUrl = URL.createObjectURL(blob);
+      const newTab = window.open(blobUrl, '_blank');
+      if (!newTab) {
+        // Fallback download if popup blocked
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+    } catch (err) {
+      console.error('Error generating point PDF:', err);
+      alert('Erreur lors de la generation du PDF du point.');
+    }
+  };
+
+  // Auto-focus the marker when navigating points in PLAN tab.
+  useEffect(() => {
+    if (subView !== 'VIEWER') return;
+    if (!selectedPoint) return;
+    if (panelMode === 'closed') return;
+    if (viewerTab !== 'PLAN') return;
+    const id = selectedPoint.id;
+    const t = window.setTimeout(() => {
+      const el = document.querySelector(`[data-point-id="${id}"]`) as HTMLElement | null;
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+    }, 30);
+    return () => window.clearTimeout(t);
+  }, [selectedPoint, panelMode, viewerTab, subView]);
+
   // PDF
   const handleGeneratePdf = async () => {
     if (!currentPlan) return;
     setGeneratingPdf(true);
     try {
-      const { blob, filename } = await generatePlanPDF(currentPlan);
+      const { generatePlanPDFPremium } = await import('../services/plan-pdf-premium');
+      const { blob, filename } = await generatePlanPDFPremium(currentPlan);
       const blobUrl = URL.createObjectURL(blob);
       const newTab = window.open(blobUrl, '_blank');
       if (!newTab) {
@@ -499,6 +649,27 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
   // VIEWER view
   if (subView === 'VIEWER' && currentPlan) {
     const isPanelOpen = panelMode !== 'closed';
+    const allPointsSorted = [...currentPlan.points].sort((a, b) => a.pointNumber - b.pointNumber);
+
+    const filteredForAction = allPointsSorted.filter((p) => {
+      const q = actionQuery.trim().toLowerCase();
+      if (q) {
+        const hay = `${p.pointNumber} ${p.title} ${p.description || ''} ${p.room || ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      if (actionCategory !== 'all' && p.category !== actionCategory) return false;
+      return true;
+    });
+
+    const byStatus = {
+      a_faire: filteredForAction.filter((p) => p.status === 'a_faire'),
+      en_cours: filteredForAction.filter((p) => p.status === 'en_cours'),
+      termine: filteredForAction.filter((p) => p.status === 'termine'),
+    };
+
+    const totalPoints = currentPlan.points.length;
+    const donePoints = currentPlan.points.filter((p) => p.status === 'termine').length;
+    const completionRate = totalPoints > 0 ? Math.round((donePoints / totalPoints) * 100) : 0;
 
     return (
       <div className="view">
@@ -535,103 +706,245 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
                 <span className="badge badge--info">{currentPlan.points.length} point(s)</span>
               </div>
 
-              {/* Plan viewer */}
-              <div className="plan-viewer" ref={viewerRef}>
-                {/* Zoom controls */}
-                <div className="plan-viewer__controls">
-                  <button className="btn btn--ghost" onClick={() => setZoom((z) => Math.min(z + 0.25, 4))} title="Zoom +">
-                    <ZoomIn size={18} />
-                  </button>
-                  <button className="btn btn--ghost" onClick={() => setZoom((z) => Math.max(z - 0.25, 0.5))} title="Zoom -">
-                    <ZoomOut size={18} />
-                  </button>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', padding: '4px 8px' }}>
-                    {Math.round(zoom * 100)}%
-                  </span>
-                </div>
-
-                <div
-                  className="plan-viewer__canvas"
-                  style={{ transform: `scale(${zoom})`, transformOrigin: '0 0' }}
-                  onMouseDown={handleCanvasMouseDown}
-                  onClick={handleCanvasClick}
+              {/* Tabs */}
+              <div className="plan-tabs">
+                <button
+                  className={`plan-tab${viewerTab === 'PLAN' ? ' plan-tab--active' : ''}`}
+                  onClick={() => setViewerTab('PLAN')}
+                  type="button"
                 >
-                  <img
-                    ref={imageRef}
-                    src={currentPlan.imageDataUrl}
-                    alt="Plan"
-                    className="plan-viewer__image"
-                    draggable={false}
-                  />
-
-                  {/* Point markers */}
-                  {currentPlan.points.map((pt) => (
-                    <div
-                      key={pt.id}
-                      className={`plan-marker plan-marker--${pt.status}${selectedPoint?.id === pt.id && isPanelOpen ? ' plan-marker--active' : ''}`}
-                      style={{
-                        left: `${pt.positionX}%`,
-                        top: `${pt.positionY}%`,
-                      }}
-                      onClick={(e) => handleMarkerClick(pt, e)}
-                      title={`#${pt.pointNumber} ${pt.title}`}
-                    >
-                      {pt.pointNumber}
-                    </div>
-                  ))}
+                  <Map size={16} /> Plan
+                </button>
+                <button
+                  className={`plan-tab${viewerTab === 'ACTION' ? ' plan-tab--active' : ''}`}
+                  onClick={() => setViewerTab('ACTION')}
+                  type="button"
+                >
+                  <ClipboardList size={16} /> Plan d'action
+                </button>
+                <div className="plan-tabs__spacer" />
+                <div className="plan-tabs__stats">
+                  <span className="badge badge--info">{completionRate}% terminé</span>
+                  <span className="badge badge--danger">{currentPlan.points.filter((p) => p.status === 'a_faire').length} à faire</span>
+                  <span className="badge badge--warning">{currentPlan.points.filter((p) => p.status === 'en_cours').length} en cours</span>
                 </div>
               </div>
 
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '8px', textAlign: 'center' }}>
-                Cliquez sur le plan pour ajouter un point
-              </p>
+              {viewerTab === 'PLAN' && (
+                <>
+                  {/* Plan viewer */}
+                  <div className="plan-viewer" ref={viewerRef}>
+                    {/* Zoom controls */}
+                    <div className="plan-viewer__controls">
+                      <button className="btn btn--ghost" onClick={() => setZoom((z) => Math.min(z + 0.25, 4))} title="Zoom +">
+                        <ZoomIn size={18} />
+                      </button>
+                      <button className="btn btn--ghost" onClick={() => setZoom((z) => Math.max(z - 0.25, 0.5))} title="Zoom -">
+                        <ZoomOut size={18} />
+                      </button>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', padding: '4px 8px' }}>
+                        {Math.round(zoom * 100)}%
+                      </span>
+                    </div>
 
-              {/* Points list */}
-              {currentPlan.points.length > 0 && (
-                <div style={{ marginTop: '20px' }}>
-                  <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px' }}>
-                    Points d'inspection ({currentPlan.points.length})
-                  </h3>
-                  <div className="plan-points-list">
-                    {[...currentPlan.points]
-                      .sort((a, b) => a.pointNumber - b.pointNumber)
-                      .map((pt) => (
-                        <div
+                    <div
+                      className="plan-viewer__canvas"
+                      style={{ transform: `scale(${zoom})`, transformOrigin: '0 0' }}
+                      onMouseDown={handleCanvasMouseDown}
+                      onClick={handleCanvasClick}
+                    >
+                      <img
+                        ref={imageRef}
+                        src={currentPlan.imageDataUrl}
+                        alt="Plan"
+                        className="plan-viewer__image"
+                        draggable={false}
+                      />
+
+                      {/* Point markers */}
+                      {currentPlan.points.map((pt) => (
+                        <PinMarker
                           key={pt.id}
-                          className={`plan-points-list__item${selectedPoint?.id === pt.id && isPanelOpen ? ' plan-points-list__item--active' : ''}`}
-                          onClick={() => {
-                            setSelectedPoint(pt);
-                            setEditingPoint(null);
-                            setPanelMode('detail');
-                          }}
-                        >
+                          point={pt}
+                          isSelected={!!(selectedPoint?.id === pt.id && isPanelOpen)}
+                          onClick={(e) => handleMarkerClick(pt, e)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '8px', textAlign: 'center' }}>
+                    Cliquez sur le plan pour ajouter un point
+                  </p>
+
+                  {/* Points list */}
+                  {currentPlan.points.length > 0 && (
+                    <div style={{ marginTop: '20px' }}>
+                      <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px' }}>
+                        Points d'inspection ({currentPlan.points.length})
+                      </h3>
+                      <div className="plan-points-list">
+                        {allPointsSorted.map((pt) => (
                           <div
-                            className="plan-points-list__number"
-                            style={{
-                              background:
-                                pt.status === 'termine'
-                                  ? 'var(--success)'
-                                  : pt.status === 'en_cours'
-                                    ? 'var(--warning)'
-                                    : 'var(--danger)',
+                            key={pt.id}
+                            className={`plan-points-list__item${selectedPoint?.id === pt.id && isPanelOpen ? ' plan-points-list__item--active' : ''}`}
+                            onClick={() => {
+                              setSelectedPoint(pt);
+                              setEditingPoint(null);
+                              setPanelMode('detail');
                             }}
                           >
-                            {pt.pointNumber}
-                          </div>
-                          <div className="plan-points-list__content">
-                            <div className="plan-points-list__title">{pt.title}</div>
-                            <div className="plan-points-list__badges">
-                              <span className="badge badge--info" style={{ fontSize: '0.7rem' }}>
-                                {categoryLabels[pt.category] || pt.category}
-                              </span>
-                              <span className={`badge ${statusBadge[pt.status]}`} style={{ fontSize: '0.7rem' }}>
-                                {statusLabels[pt.status]}
-                              </span>
+                            <div
+                              className="plan-points-list__number"
+                              style={{
+                                background:
+                                  pt.status === 'termine'
+                                    ? 'var(--success)'
+                                    : pt.status === 'en_cours'
+                                      ? 'var(--warning)'
+                                      : 'var(--danger)',
+                              }}
+                            >
+                              {pt.pointNumber}
                             </div>
+                            <div className="plan-points-list__content">
+                              <div className="plan-points-list__title">{pt.title}</div>
+                              <div className="plan-points-list__badges">
+                                <span className="badge badge--info" style={{ fontSize: '0.7rem' }}>
+                                  {categoryLabels[pt.category] || pt.category}
+                                </span>
+                                <span className={`badge ${statusBadge[pt.status]}`} style={{ fontSize: '0.7rem' }}>
+                                  {statusLabels[pt.status]}
+                                </span>
+                              </div>
+                            </div>
+                            <ChevronRight size={16} className="plan-points-list__chevron" />
                           </div>
-                          <ChevronRight size={16} className="plan-points-list__chevron" />
-                        </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {viewerTab === 'ACTION' && (
+                <div className="plan-action">
+                  <div className="plan-action__filters">
+                    <div className="plan-action__search">
+                      <Search size={16} />
+                      <input
+                        className="input plan-action__search-input"
+                        value={actionQuery}
+                        onChange={(e) => setActionQuery(e.target.value)}
+                        placeholder="Rechercher un point (#, titre, lieu...)"
+                      />
+                    </div>
+                    <select
+                      className="input select plan-action__select"
+                      value={actionCategory}
+                      onChange={(e) => setActionCategory(e.target.value || 'all')}
+                      aria-label="Filtrer par catégorie"
+                    >
+                      <option value="all">Toutes catégories</option>
+                      {Object.keys(categoryLabels).map((cat) => (
+                        <option key={cat} value={cat}>
+                          {categoryLabels[cat]}
+                        </option>
                       ))}
+                    </select>
+                    <button
+                      className="btn btn--ghost plan-action__add"
+                      onClick={() => setViewerTab('PLAN')}
+                      type="button"
+                      title="Ajouter un point en cliquant sur le plan"
+                    >
+                      <Plus size={16} /> Ajouter sur le plan
+                    </button>
+                  </div>
+
+                  <div className="plan-action__hint">
+                    Affichage: <strong>{filteredForAction.length}</strong> / {currentPlan.points.length} point(s)
+                  </div>
+
+                  <div className="plan-action-board">
+                    {(
+                      [
+                        { key: 'a_faire', title: 'À faire', badge: 'badge--danger' },
+                        { key: 'en_cours', title: 'En cours', badge: 'badge--warning' },
+                        { key: 'termine', title: 'Terminé', badge: 'badge--success' },
+                      ] as const
+                    ).map((col) => {
+                      const items = byStatus[col.key];
+                      return (
+                        <section key={col.key} className="plan-action-col">
+                          <header className="plan-action-col__header">
+                            <div className="plan-action-col__title">{col.title}</div>
+                            <span className={`badge ${col.badge}`}>{items.length}</span>
+                          </header>
+                          <div className="plan-action-col__list">
+                            {items.length === 0 ? (
+                              <div className="plan-action-col__empty">Aucun point</div>
+                            ) : (
+                              items.map((pt) => {
+                                const next =
+                                  pt.status === 'a_faire'
+                                    ? { to: 'en_cours' as const, label: 'Démarrer', Icon: Play }
+                                    : pt.status === 'en_cours'
+                                      ? { to: 'termine' as const, label: 'Terminer', Icon: CheckCircle2 }
+                                      : null;
+
+                                return (
+                                  <article
+                                    key={pt.id}
+                                    className={`plan-action-card${selectedPoint?.id === pt.id && isPanelOpen ? ' plan-action-card--active' : ''}`}
+                                    onClick={() => {
+                                      setSelectedPoint(pt);
+                                      setEditingPoint(null);
+                                      setPanelMode('detail');
+                                    }}
+                                  >
+                                    <div
+                                      className="plan-action-card__num"
+                                      style={{
+                                        background:
+                                          pt.status === 'termine'
+                                            ? 'var(--success)'
+                                            : pt.status === 'en_cours'
+                                              ? 'var(--warning)'
+                                              : 'var(--danger)',
+                                      }}
+                                    >
+                                      {pt.pointNumber}
+                                    </div>
+                                    <div className="plan-action-card__body">
+                                      <div className="plan-action-card__title">{pt.title}</div>
+                                      <div className="plan-action-card__meta">
+                                        {categoryLabels[pt.category] || pt.category}
+                                        {pt.room ? ` • ${pt.room}` : ''}
+                                      </div>
+                                    </div>
+                                    {next && (
+                                      <button
+                                        type="button"
+                                        className="btn btn--ghost plan-action-card__next"
+                                        title={next.label}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleUpdatePointStatus(pt.id, next.to);
+                                        }}
+                                      >
+                                        <next.Icon size={16} />
+                                      </button>
+                                    )}
+                                    <ChevronRight size={16} className="plan-action-card__chevron" />
+                                  </article>
+                                );
+                              })
+                            )}
+                          </div>
+                        </section>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -649,6 +962,9 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
             onDelete={handleDeletePoint}
             onEdit={handleEditFromDetail}
             onNavigate={handleNavigatePoint}
+            onFocusPoint={handleFocusPoint}
+            onDownloadPointPdf={handleDownloadPointPdf}
+            onUpdateStatus={handleUpdatePointStatus}
           />
         </div>
       </div>

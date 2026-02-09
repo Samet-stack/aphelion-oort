@@ -2,10 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Download, MapPin, Loader2, ArrowLeft, FileText, Shield, Share2, Mic, Building2 } from 'lucide-react';
 import { generateDescription } from '../services/ai';
 import { getAddress, getLocation, LocationData } from '../services/geo';
-import { generatePremiumPDF } from '../services/pdf-premium';
 import { useAuth } from '../contexts/AuthContext';
 import { reportsApi, ApiPlan } from '../services/api';
-import { generateIntegrityProof, type IntegrityProof, generateCertificateText } from '../services/crypto';
+import { generateIntegrityProof, type IntegrityProof } from '../services/crypto';
 import { ExtraWorkManager, type ExtraWorkItem } from './ExtraWork';
 import { ShareReportModal } from './ShareReport';
 import { VoiceRecorderComponent } from './VoiceRecorder';
@@ -250,22 +249,9 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
                 quality: 0.82,
             });
             
-            // Ajouter description des TS et certificat d'intégrité
-            let finalDescription = description;
-            if (extraWorks.length > 0) {
-                const tsList = extraWorks.map(ts => 
-                    `- ${ts.description} (${ts.estimatedCost}€ HT) [${ts.category}]`
-                ).join('\n');
-                finalDescription += '\n\n--- TRAVAUX SUPPLEMENTAIRES ---\n' + tsList;
-                finalDescription += `\n\nTOTAL TS: ${extraWorks.reduce((s, t) => s + t.estimatedCost, 0)}€ HT`;
-                if (clientSignature) {
-                    finalDescription += '\n\nSignature client: OUI';
-                }
-            }
-            
-            if (integrityProof) {
-                finalDescription += '\n\n--- CERTIFICATION ---\n' + generateCertificateText(integrityProof);
-            }
+            // Garder l'observation "pure".
+            // Les TS + la certification ont leurs champs dédiés et sont rendus proprement dans le PDF.
+            const finalDescription = description.trim();
             
             // Préparer les données du rapport
             const reportPayload = {
@@ -307,7 +293,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
             }
             
             // Générer le PDF
-            await generatePremiumPDF({
+            const { generatePremiumPDF } = await import('../services/pdf-premium');
+            const { blob, filename } = await generatePremiumPDF({
                 imageDataUrl,
                 address: reportData.address,
                 description: finalDescription,
@@ -329,6 +316,18 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
                 extraWorks,
                 clientSignature,
             });
+            const blobUrl = URL.createObjectURL(blob);
+            const newTab = window.open(blobUrl, '_blank');
+            if (!newTab) {
+                // Fallback download if popup blocked
+                const a = document.createElement('a');
+                a.href = blobUrl;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            }
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
             setDownloadState('done');
         } catch (err) {
             setError('Impossible de generer le PDF. Reessayez.');
