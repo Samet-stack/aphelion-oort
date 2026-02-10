@@ -42,12 +42,18 @@ const statusOptions = [
   { id: 'termine', label: 'Termine' },
 ] as const;
 
-const fileToDataUrl = (file: File, maxW = 1200, maxH = 900, quality = 0.8): Promise<string> => {
+const fileToDataUrl = (file: File): Promise<string> => {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const img = new Image();
       img.onload = () => {
+        // Screenshots (PNG) need more resolution and lossless encoding to keep text readable in PDFs.
+        const isPng = file.type === 'image/png';
+        const maxW = isPng ? 2000 : 2000;
+        const maxH = isPng ? 2400 : 2000;
+        const jpegQuality = 0.88;
+
         const canvas = document.createElement('canvas');
         let w = img.width;
         let h = img.height;
@@ -59,8 +65,10 @@ const fileToDataUrl = (file: File, maxW = 1200, maxH = 900, quality = 0.8): Prom
         canvas.width = w;
         canvas.height = h;
         const ctx = canvas.getContext('2d')!;
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL('image/jpeg', quality));
+        resolve(isPng ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', jpegQuality));
       };
       img.src = e.target?.result as string;
     };

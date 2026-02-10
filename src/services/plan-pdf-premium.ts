@@ -687,11 +687,14 @@ export const generatePlanPDFPremium = async (plan: ApiPlan): Promise<{ blob: Blo
             }
 
             doc.saveGraphicsState();
-            // Clip to the photo box (avoid overflow when we crop via "cover").
-            doc.roundedRect(ctx.margin + 6, innerY, photoW, photoH, 2, 2, null);
-            doc.clip();
-            doc.addImage(point.photoDataUrl, format, px, py, dw, dh);
-            doc.restoreGraphicsState();
+            try {
+              // Clip to the photo box (avoid overflow when we crop via "cover").
+              doc.roundedRect(ctx.margin + 6, innerY, photoW, photoH, 2, 2, null);
+              doc.clip();
+              doc.addImage(point.photoDataUrl, format, px, py, dw, dh);
+            } finally {
+              doc.restoreGraphicsState();
+            }
           }
         } catch {
           // Ignore photo rendering errors; we keep PDF export working.
