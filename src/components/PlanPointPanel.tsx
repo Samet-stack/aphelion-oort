@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { X, ChevronLeft, ChevronRight, Trash2, Edit2, MapPin, FileText } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Trash2, Edit2, MapPin, FileText, FilePlus } from 'lucide-react';
 import { ApiPlanPoint } from '../services/api';
 import { PlanPointDetailContent } from './PlanPointDetail';
 import { PlanPointFormFields, PlanPointFormData } from './PlanPointForm';
@@ -18,6 +18,7 @@ export interface PlanPointPanelProps {
   onFocusPoint?: (point: ApiPlanPoint) => void;
   onDownloadPointPdf?: (point: ApiPlanPoint) => void;
   onUpdateStatus?: (pointId: string, status: ApiPlanPoint['status']) => void;
+  onCreateReport?: (point: ApiPlanPoint) => void;
 }
 
 const useIsMobile = () => {
@@ -48,6 +49,7 @@ export const PlanPointPanel: React.FC<PlanPointPanelProps> = ({
   onFocusPoint,
   onDownloadPointPdf,
   onUpdateStatus,
+  onCreateReport,
 }) => {
   const isMobile = useIsMobile();
 
@@ -191,6 +193,15 @@ export const PlanPointPanel: React.FC<PlanPointPanelProps> = ({
                     {onDownloadPointPdf && (
                       <button className="btn btn--ghost" onClick={() => onDownloadPointPdf(point)}>
                         <FileText size={16} /> Fiche PDF
+                      </button>
+                    )}
+                    {onCreateReport && (
+                      <button 
+                        className="btn btn--primary" 
+                        onClick={() => onCreateReport(point)}
+                        style={{ background: 'var(--success)' }}
+                      >
+                        <FilePlus size={16} /> Créer rapport
                       </button>
                     )}
                   </div>

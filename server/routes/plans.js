@@ -2,6 +2,12 @@ import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { query, get, run } from '../database.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { 
+  validateCreatePlan, 
+  validateUpdatePlan, 
+  validateCreatePoint, 
+  validateUpdatePoint 
+} from '../middleware/validation.js';
 
 const router = express.Router();
 
@@ -9,22 +15,24 @@ const router = express.Router();
 router.use(authMiddleware);
 
 // Liste des plans de l'utilisateur (sans image_data_url pour la perf)
+// Optimisé: utilise une sous-requête pour compter les points (évite N+1)
 router.get('/', async (req, res) => {
   try {
     const userId = req.user.id;
     const plans = await query(
-      `SELECT id, user_id, site_name, address, created_at, updated_at
-       FROM plans WHERE user_id = ?
-       ORDER BY created_at DESC`,
+      `SELECT 
+         p.id, p.user_id, p.site_name, p.address, p.created_at, p.updated_at,
+         (SELECT COUNT(*) FROM plan_points WHERE plan_id = p.id) as points_count
+       FROM plans p 
+       WHERE p.user_id = ?
+       ORDER BY p.created_at DESC`,
       [userId]
     );
 
+    // Mapper points_count vers pointsCount pour camelCase
     for (const plan of plans) {
-      const countResult = await get(
-        'SELECT COUNT(*) as count FROM plan_points WHERE plan_id = ?',
-        [plan.id]
-      );
-      plan.pointsCount = Number(countResult.count || 0);
+      plan.pointsCount = Number(plan.points_count || 0);
+      delete plan.points_count;
     }
 
     res.json({ success: true, data: { plans } });
@@ -72,7 +80,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Créer un nouveau plan
-router.post('/', async (req, res) => {
+router.post('/', validateCreatePlan, async (req, res) => {
   try {
     const userId = req.user.id;
     const { siteName, address, imageDataUrl } = req.body;
@@ -139,7 +147,7 @@ router.delete('/:id', async (req, res) => {
 });
 
 // Ajouter un point sur un plan
-router.post('/:id/points', async (req, res) => {
+router.post('/:id/points', validateCreatePoint, async (req, res) => {
   try {
     const userId = req.user.id;
     const { id: planId } = req.params;
@@ -197,7 +205,7 @@ router.post('/:id/points', async (req, res) => {
 });
 
 // Modifier un point
-router.put('/:id/points/:pointId', async (req, res) => {
+router.put('/:id/points/:pointId', validateUpdatePoint, async (req, res) => {
   try {
     const userId = req.user.id;
     const { id: planId, pointId } = req.params;

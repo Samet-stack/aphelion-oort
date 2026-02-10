@@ -2151,15 +2151,30 @@ select {
   border-radius: 16px;
   border: 1px solid var(--stroke);
   background: rgba(11, 14, 17, 0.6);
-  min-height: 250px;
-  max-height: 50vh;
+  min-height: 200px;
+  max-height: 40vh;
   cursor: crosshair;
 }
 
 @media (min-width: 720px) {
   .plan-viewer {
     min-height: 300px;
-    max-height: 70vh;
+    max-height: 60vh;
+  }
+}
+
+/* Smaller heights - reduce max-height */
+@media (max-height: 700px) {
+  .plan-viewer {
+    max-height: 35vh;
+    min-height: 180px;
+  }
+}
+
+@media (max-height: 500px) {
+  .plan-viewer {
+    max-height: 30vh;
+    min-height: 150px;
   }
 }
 
@@ -2308,6 +2323,35 @@ select {
   border-radius: 14px;
   margin: 10px 0 16px;
   flex-wrap: wrap;
+  /* Ensure tabs don't shrink too much on small heights */
+  min-height: fit-content;
+}
+
+/* Compact tabs on small heights */
+@media (max-height: 600px) {
+  .plan-tabs {
+    padding: 6px 8px;
+    gap: 6px;
+    margin: 6px 0 10px;
+  }
+  
+  .plan-tab {
+    padding: 6px 10px;
+    font-size: 0.85rem;
+  }
+}
+
+@media (max-height: 450px) {
+  .plan-tabs {
+    padding: 4px 6px;
+    gap: 4px;
+    margin: 4px 0 8px;
+  }
+  
+  .plan-tab {
+    padding: 4px 8px;
+    font-size: 0.8rem;
+  }
 }
 
 .plan-tab {
@@ -2352,6 +2396,20 @@ select {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  max-height: calc(100vh - var(--header-height) - 200px);
+  overflow-y: auto;
+}
+
+@media (max-height: 700px) {
+  .plan-action {
+    max-height: calc(100vh - var(--header-height) - 120px);
+  }
+}
+
+@media (max-height: 500px) {
+  .plan-action {
+    max-height: calc(100vh - var(--header-height) - 80px);
+  }
 }
 
 .plan-action__filters {
@@ -2403,12 +2461,28 @@ select {
   display: grid;
   grid-template-columns: 1fr;
   gap: 12px;
+  /* Allow scrolling within the board on small screens */
+  overflow-y: auto;
+  max-height: calc(100vh - var(--header-height) - 280px);
+}
+
+@media (max-height: 700px) {
+  .plan-action-board {
+    max-height: calc(100vh - var(--header-height) - 200px);
+  }
+}
+
+@media (max-height: 500px) {
+  .plan-action-board {
+    max-height: calc(100vh - var(--header-height) - 160px);
+  }
 }
 
 @media (min-width: 900px) {
   .plan-action-board {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 14px;
+    max-height: calc(100vh - var(--header-height) - 240px);
   }
 }
 
@@ -2439,6 +2513,21 @@ select {
   flex-direction: column;
   gap: 10px;
   padding: 12px;
+  /* Scrollable column on small heights */
+  max-height: calc(100vh - var(--header-height) - 350px);
+  overflow-y: auto;
+}
+
+@media (max-height: 700px) {
+  .plan-action-col__list {
+    max-height: calc(100vh - var(--header-height) - 280px);
+  }
+}
+
+@media (max-height: 500px) {
+  .plan-action-col__list {
+    max-height: calc(100vh - var(--header-height) - 220px);
+  }
 }
 
 .plan-action-col__empty {
@@ -2548,6 +2637,16 @@ select {
   grid-template-columns: 1fr;
   gap: 0;
   transition: grid-template-columns 0.35s var(--ease-smooth);
+  /* Prevent overflow on small viewports */
+  max-height: calc(100vh - var(--header-height) - 40px);
+  overflow: hidden;
+}
+
+/* Ensure main content area handles overflow properly */
+.plan-viewer-layout__main {
+  min-width: 0;
+  overflow-y: auto;
+  max-height: calc(100vh - var(--header-height) - 40px);
 }
 
 @media (min-width: 721px) {
@@ -2557,9 +2656,7 @@ select {
   }
 }
 
-.plan-viewer-layout__main {
-  min-width: 0;
-}
+
 
 /* ===== SIDE PANEL ===== */
 .plan-panel {
@@ -2577,6 +2674,22 @@ select {
   border-radius: 16px;
   max-height: calc(100vh - 120px);
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+}
+
+/* Smaller heights for desktop panel */
+@media (max-height: 700px) {
+  .plan-panel--desktop {
+    max-height: calc(100vh - 80px);
+    top: 60px;
+  }
+}
+
+@media (max-height: 500px) {
+  .plan-panel--desktop {
+    max-height: calc(100vh - 60px);
+    top: 40px;
+    border-radius: 12px;
+  }
 }
 
 .plan-panel--mobile {
@@ -2730,6 +2843,18 @@ select {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* Animation pulse pour l'analyse IA */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.05);
   }
 }
 

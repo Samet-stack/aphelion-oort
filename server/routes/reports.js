@@ -2,6 +2,7 @@ import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { query, get, run } from '../database.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { validateCreateReport } from '../middleware/validation.js';
 
 const router = express.Router();
 
@@ -74,13 +75,26 @@ router.get('/', async (req, res) => {
       [userId, limitNum, offsetNum]
     );
 
-    // Pour chaque rapport, récupérer les travaux supplémentaires
-    for (const report of reports) {
-      const extraWorks = await query(
-        'SELECT * FROM extra_works WHERE report_id = ?',
-        [report.id]
+    // Optimisé: récupérer tous les extra_works en une requête (évite N+1)
+    if (reports.length > 0) {
+      const reportIds = reports.map(r => r.id);
+      const placeholders = reportIds.map(() => '?').join(',');
+      const allExtraWorks = await query(
+        `SELECT * FROM extra_works WHERE report_id IN (${placeholders})`,
+        reportIds
       );
-      report.extraWorks = extraWorks;
+      
+      // Grouper les extra_works par report_id
+      const extraWorksByReport = allExtraWorks.reduce((acc, work) => {
+        if (!acc[work.reportId]) acc[work.reportId] = [];
+        acc[work.reportId].push(work);
+        return acc;
+      }, {});
+      
+      // Attacher les extra_works à chaque rapport
+      for (const report of reports) {
+        report.extraWorks = extraWorksByReport[report.id] || [];
+      }
     }
     
     res.json({
@@ -137,7 +151,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Create report
-router.post('/', async (req, res) => {
+router.post('/', validateCreateReport, async (req, res) => {
   try {
     const userId = req.user.id;
     const {
@@ -156,7 +170,9 @@ router.post('/', async (req, res) => {
       category,
       integrityHash,
       clientSignature,
-      extraWorks = []
+      extraWorks = [],
+      planId,
+      planPointId
     } = req.body;
     
     const id = uuidv4();
@@ -165,12 +181,14 @@ router.post('/', async (req, res) => {
       `INSERT INTO reports (
         id, user_id, report_id, date_label, address, coordinates, accuracy,
         location_source, description, image_data_url, site_name, operator_name,
-        client_name, priority, category, integrity_hash, client_signature
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        client_name, priority, category, integrity_hash, client_signature,
+        plan_id, plan_point_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id, userId, reportId, dateLabel, address, coordinates, accuracy,
         locationSource, description, imageDataUrl, siteName, operatorName,
-        clientName, priority, category, integrityHash, clientSignature
+        clientName, priority, category, integrityHash, clientSignature,
+        planId || null, planPointId || null
       ]
     );
     

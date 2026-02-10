@@ -15,7 +15,7 @@ import { Register } from './components/Register';
 import { VerifyEmail } from './components/VerifyEmail';
 import { RegisterSuccess } from './components/RegisterSuccess';
 import { PageTransition } from './components/PageTransition';
-import { ApiPlan } from './services/api';
+import { ApiPlan, ApiPlanPoint } from './services/api';
 
 
 type ViewState = 'LANDING' | 'SELECT_PLAN' | 'CAMERA' | 'REPORT' | 'HISTORY' | 'PLANS' | 'AUTH';
@@ -26,6 +26,7 @@ function AppContent() {
   const [view, setView] = useState<ViewState>('LANDING');
   const [capturedImage, setCapturedImage] = useState<File | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<ApiPlan | null>(null);
+  const [selectedPoint, setSelectedPoint] = useState<ApiPlanPoint | null>(null);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
 
   if (isLoading) {
@@ -64,7 +65,28 @@ function AppContent() {
 
   const handleSelectPlan = (plan: ApiPlan) => {
     setSelectedPlan(plan);
+    setSelectedPoint(null); // Reset le point quand on change de plan
     setView('CAMERA');
+  };
+
+  const handleCreateReportFromPoint = (plan: ApiPlan, point: ApiPlanPoint) => {
+    // Convertir la photo du point en File pour ReportView
+    // On va créer un faux File à partir du data URL
+    const photoDataUrl = point.photoDataUrl;
+    const byteString = atob(photoDataUrl.split(',')[1]);
+    const mimeString = photoDataUrl.split(',')[0].split(':')[1].split(';')[0];
+    const ab = new ArrayBuffer(byteString.length);
+    const ia = new Uint8Array(ab);
+    for (let i = 0; i < byteString.length; i++) {
+      ia[i] = byteString.charCodeAt(i);
+    }
+    const blob = new Blob([ab], { type: mimeString });
+    const file = new File([blob], `point-${point.pointNumber}.jpg`, { type: mimeString });
+    
+    setSelectedPlan(plan);
+    setSelectedPoint(point);
+    setCapturedImage(file);
+    setView('REPORT');
   };
 
   const handleCapture = (file: File) => {
@@ -85,6 +107,7 @@ function AppContent() {
   const handleReset = () => {
     setCapturedImage(null);
     setSelectedPlan(null);
+    setSelectedPoint(null);
     setView('LANDING');
   };
 
@@ -124,6 +147,7 @@ function AppContent() {
             <ReportView
               imageFile={capturedImage}
               selectedPlan={selectedPlan}
+              selectedPoint={selectedPoint}
               onBack={handleBackToCamera}
               onReset={handleReset}
             />
@@ -140,7 +164,10 @@ function AppContent() {
 
         {view === 'PLANS' && (
           <PageTransition key="plans">
-            <PlanView onBack={handleReset} />
+            <PlanView 
+              onBack={handleReset} 
+              onCreateReportFromPoint={handleCreateReportFromPoint}
+            />
           </PageTransition>
         )}
       </AnimatePresence>

@@ -60,6 +60,9 @@ const toCamelObject = (obj) =>
 
 const mapRows = (rows) => rows.map(toCamelObject);
 
+// Export getPool pour les migrations
+export { getPool };
+
 export const initDb = async () => {
   const db = getPool();
 

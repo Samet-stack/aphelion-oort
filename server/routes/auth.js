@@ -3,6 +3,13 @@ import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { get, run } from '../database.js';
 import { generateToken, authMiddleware } from '../middleware/auth.js';
+import { authLimiter, registerLimiter } from '../middleware/rateLimit.js';
+import { 
+  validateRegister, 
+  validateLogin, 
+  validateUpdateProfile, 
+  validateChangePassword 
+} from '../middleware/validation.js';
 import { 
   generateEmailVerification, 
   verifyEmailToken, 
@@ -12,8 +19,8 @@ import {
 
 const router = express.Router();
 
-// Register
-router.post('/register', async (req, res) => {
+// Register - with rate limiting and validation
+router.post('/register', registerLimiter, validateRegister, async (req, res) => {
   try {
     const { email, password, firstName, lastName, companyName } = req.body;
     
@@ -172,8 +179,8 @@ router.post('/resend-verification', async (req, res) => {
   }
 });
 
-// Login
-router.post('/login', async (req, res) => {
+// Login - with rate limiting and validation
+router.post('/login', authLimiter, validateLogin, async (req, res) => {
   try {
     const { email, password } = req.body;
     
@@ -250,7 +257,7 @@ router.get('/me', authMiddleware, async (req, res) => {
 });
 
 // Update profile
-router.put('/profile', authMiddleware, async (req, res) => {
+router.put('/profile', authMiddleware, validateUpdateProfile, async (req, res) => {
   try {
     const { firstName, lastName, companyName } = req.body;
     const userId = req.user.id;
@@ -281,7 +288,7 @@ router.put('/profile', authMiddleware, async (req, res) => {
 });
 
 // Change password
-router.put('/password', authMiddleware, async (req, res) => {
+router.put('/password', authMiddleware, validateChangePassword, async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
     const userId = req.user.id;

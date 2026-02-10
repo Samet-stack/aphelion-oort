@@ -8,6 +8,7 @@ import { ConfirmModal } from './ui/ConfirmModal';
 
 interface PlanViewProps {
   onBack: () => void;
+  onCreateReportFromPoint?: (plan: ApiPlan, point: ApiPlanPoint) => void;
 }
 
 type SubView = 'LIST' | 'UPLOAD' | 'VIEWER';
@@ -128,7 +129,7 @@ const PinMarker: React.FC<{
   );
 };
 
-export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
+export const PlanView: React.FC<PlanViewProps> = ({ onBack, onCreateReportFromPoint }) => {
   const { toast } = useToast();
 
   // Sub-views
@@ -442,6 +443,11 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
       console.error('Error updating status:', err);
       toast.error('Erreur lors de la mise à jour du statut.');
     }
+  };
+
+  const handleCreateReportFromPoint = (point: ApiPlanPoint) => {
+    if (!currentPlan || !onCreateReportFromPoint) return;
+    onCreateReportFromPoint(currentPlan, point);
   };
 
   const handleDownloadPointPdf = async (point: ApiPlanPoint) => {
@@ -1036,6 +1042,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
             onFocusPoint={handleFocusPoint}
             onDownloadPointPdf={handleDownloadPointPdf}
             onUpdateStatus={handleUpdatePointStatus}
+            onCreateReport={onCreateReportFromPoint ? handleCreateReportFromPoint : undefined}
           />
         </div>
         </div>

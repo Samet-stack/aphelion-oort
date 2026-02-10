@@ -10,6 +10,7 @@ import reportRoutes from './routes/reports.js';
 import shareRoutes from './routes/shares.js';
 import exportRoutes from './routes/export.js';
 import planRoutes from './routes/plans.js';
+import aiRoutes from './routes/ai.js';
 
 dotenv.config();
 
@@ -56,6 +57,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/shares', shareRoutes);
 app.use('/api/export', exportRoutes);
 app.use('/api/plans', planRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

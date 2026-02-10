@@ -55,7 +55,10 @@ create table if not exists public.reports (
   priority text check (priority in ('low', 'medium', 'high')),
   category text,
   integrity_hash text,
-  client_signature text
+  client_signature text,
+  -- Liaison avec les plans (optionnel)
+  plan_point_id uuid references public.plan_points(id) on delete set null,
+  plan_id uuid references public.plans(id) on delete set null
 );
 
 create table if not exists public.extra_works (
@@ -97,6 +100,8 @@ create table if not exists public.email_verifications (
 create index if not exists idx_reports_user on public.reports(user_id);
 create index if not exists idx_reports_date on public.reports(created_at desc);
 create index if not exists idx_reports_user_category on public.reports(user_id, category);
+create index if not exists idx_reports_plan_point on public.reports(plan_point_id);
+create index if not exists idx_reports_plan on public.reports(plan_id);
 create index if not exists idx_extra_report on public.extra_works(report_id);
 create index if not exists idx_extra_user on public.extra_works(user_id);
 create index if not exists idx_shares_report on public.shares(report_id);

@@ -1,18 +1,21 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Download, MapPin, Loader2, ArrowLeft, FileText, Shield, Share2, Mic, Building2 } from 'lucide-react';
-import { generateDescription } from '../services/ai';
+import { analyzeImage, type AIAnalysisResult } from '../services/ai';
 import { getAddress, getLocation, LocationData } from '../services/geo';
 import { useAuth } from '../contexts/AuthContext';
-import { reportsApi, ApiPlan } from '../services/api';
+import { reportsApi, ApiPlan, ApiPlanPoint } from '../services/api';
 import { generateIntegrityProof, type IntegrityProof } from '../services/crypto';
 import { ExtraWorkManager, type ExtraWorkItem } from './ExtraWork';
 import { ShareReportModal } from './ShareReport';
 import { VoiceRecorderComponent } from './VoiceRecorder';
+import { AIAnalysisCard } from './AIAnalysisCard';
+import { AIStatusIndicator } from './AIStatusIndicator';
 import { branding } from '../config/branding';
 
 interface ReportViewProps {
     imageFile: File;
     selectedPlan: ApiPlan;
+    selectedPoint?: ApiPlanPoint | null;
     onBack: () => void;
     onReset: () => void;
 }
@@ -97,13 +100,12 @@ const formatReportId = (date: Date) => {
     return `SF-${stamp}-${time}-${random}`;
 };
 
-export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan, onBack, onReset }) => {
+export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan, selectedPoint, onBack, onReset }) => {
     const { refreshReports, saveReportOffline } = useAuth();
     const [analyzing, setAnalyzing] = useState(true);
     const [analysisStage, setAnalysisStage] = useState(0);
     const [imageUrl, setImageUrl] = useState<string>('');
     const [reportData, setReportData] = useState<ReportData | null>(null);
-    const [description, setDescription] = useState('');
     const [downloadState, setDownloadState] = useState<'idle' | 'loading' | 'done'>('idle');
     const [error, setError] = useState<string | null>(null);
     const [infoMessage, setInfoMessage] = useState<string | null>(null);
@@ -121,12 +123,34 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
     // Pilier 3: Dictaphone
     const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
     
-    // Champs métier - pré-remplis avec les infos du plan
+    // Champs métier - pré-remplis avec les infos du plan ou du point
     const [siteName, setSiteName] = useState(selectedPlan.siteName || '');
     const [operatorName, setOperatorName] = useState('');
     const [clientName, setClientName] = useState('');
-    const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
-    const [category, setCategory] = useState<'safety' | 'progress' | 'anomaly' | 'other'>('other');
+    // Si on vient d'un point, utiliser sa priorité/catégorie, sinon valeur par défaut
+    const mapPointCategory = (cat?: string): 'safety' | 'progress' | 'anomaly' | 'other' => {
+        if (cat === 'defaut') return 'anomaly';
+        if (cat === 'validation') return 'progress';
+        if (['electricite', 'plomberie', 'maconnerie', 'menuiserie'].includes(cat || '')) return 'other';
+        return 'other';
+    };
+    const [priority, setPriority] = useState<'low' | 'medium' | 'high'>(
+        selectedPoint?.status === 'a_faire' ? 'high' : 
+        selectedPoint?.status === 'en_cours' ? 'medium' : 'low'
+    );
+    const [category, setCategory] = useState<'safety' | 'progress' | 'anomaly' | 'other'>(
+        mapPointCategory(selectedPoint?.category)
+    );
+    // Pré-remplir la description si on vient d'un point
+    const [description, setDescription] = useState(selectedPoint?.description || '');
+    
+    // Résultat de l'analyse IA
+    const [aiResult, setAiResult] = useState<AIAnalysisResult | null>(null);
+    const [aiError, setAiError] = useState<string | null>(null);
+    const [isAnalyzingAI, setIsAnalyzingAI] = useState(true);
+    
+    // Indiquer si on vient d'un point existant
+    const isFromExistingPoint = !!selectedPoint;
 
     const progress = useMemo(() => {
         if (!analyzing) {
@@ -145,6 +169,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
         setDownloadState('idle');
         setError(null);
         setInfoMessage(null);
+        setAiError(null);
+        setIsAnalyzingAI(true);
 
         const timers = analysisSteps.map((_, index) =>
             setTimeout(() => {
@@ -156,10 +182,25 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
 
         const run = async () => {
             try {
-                const [location, aiDescription] = await Promise.all([
+                // Lancer l'analyse IA et la géolocalisation en parallèle
+                const [location, aiAnalysis] = await Promise.all([
                     getLocation(),
-                    generateDescription(imageFile),
+                    analyzeImage(imageFile, { language: 'fr', detail: 'auto' }),
                 ]);
+                
+                if (!active) return;
+
+                // Stocker le résultat de l'IA
+                setAiResult(aiAnalysis);
+                setIsAnalyzingAI(false);
+                
+                // Pré-remplir les champs avec l'analyse IA si disponible
+                if (aiAnalysis && aiAnalysis.description) {
+                    setDescription(aiAnalysis.description);
+                    setCategory(aiAnalysis.category);
+                    setPriority(aiAnalysis.priority);
+                }
+
                 const address = await getAddress(location.lat, location.lng, location.source);
                 const now = new Date();
                 const dateLabel = new Intl.DateTimeFormat('fr-FR', {
@@ -190,7 +231,6 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
                     reportId,
                     createdAt: now.toISOString(),
                 });
-                setDescription(aiDescription);
 
                 // Pilier 2: Générer preuve d'intégrité
                 const imageData = await fileToDataUrl(imageFile, {
@@ -207,6 +247,10 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
                 if (!active) {
                     return;
                 }
+                console.error('[ReportView] Analysis error:', err);
+                setAiError(err instanceof Error ? err.message : 'Erreur analyse IA');
+                setIsAnalyzingAI(false);
+                
                 setReportData({
                     dateLabel: new Intl.DateTimeFormat('fr-FR', {
                         dateStyle: 'full',
@@ -271,6 +315,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
                 integrityHash: integrityProof?.hash,
                 clientSignature: clientSignature || undefined,
                 planId: selectedPlan.id, // Lien vers le plan
+                planPointId: selectedPoint?.id, // Lien vers le point (si vient d'un point)
                 extraWorks: extraWorks.map(w => ({
                     description: w.description,
                     estimatedCost: w.estimatedCost,
@@ -476,6 +521,12 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
                         {infoMessage && <p className="detail-sub" style={{ color: '#7cfc8a' }}>{infoMessage}</p>}
                     </div>
                     <div className="report__actions">
+                        {/* Badge point existant */}
+                        {isFromExistingPoint && selectedPoint && (
+                            <span className="badge badge--info" title={`Point #${selectedPoint.pointNumber} du plan`}>
+                                <MapPin size={12} /> Point #{selectedPoint.pointNumber}
+                            </span>
+                        )}
                         {/* Pilier 2: Badge intégrité */}
                         {integrityProof && (
                             <span className="badge badge--success" title={`Hash: ${integrityProof.hash.substring(0, 16)}...`}>
@@ -533,9 +584,28 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
                             <span className="detail-sub">{reportData?.coordinates}</span>
                         </div>
                         
+                        {/* Analyse IA */}
+                        <AIAnalysisCard 
+                            result={aiResult} 
+                            isLoading={isAnalyzingAI} 
+                        />
+
                         {/* Formulaire métier */}
                         <div className="detail-card detail-card--wide">
-                            <span className="detail-label">Informations chantier</span>
+                            <div style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                marginBottom: '12px',
+                            }}>
+                                <span className="detail-label">Informations chantier</span>
+                                <AIStatusIndicator 
+                                    isAnalyzing={isAnalyzingAI}
+                                    hasResult={!!aiResult}
+                                    error={aiError}
+                                    confidence={aiResult?.confidence}
+                                />
+                            </div>
                             <div className="form-grid">
                                 <div className="form-field">
                                     <label>Nom du chantier</label>
