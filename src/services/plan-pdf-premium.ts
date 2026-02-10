@@ -598,7 +598,7 @@ export const generatePlanPDFPremium = async (plan: ApiPlan): Promise<{ blob: Blo
       const pagePoints = sortedPoints.slice(pageIdx * pointsPerPage, (pageIdx + 1) * pointsPerPage);
       
       pagePoints.forEach((point, idx) => {
-        const cardH = 108;
+        const cardH = 122;
         
         // Vérifier espace
         if (y + cardH > ctx.pageHeight - ctx.margin - 10) {
@@ -653,8 +653,8 @@ export const generatePlanPDFPremium = async (plan: ApiPlan): Promise<{ blob: Blo
         let innerY = y + 22;
         
         // === PHOTO (gauche) ===
-        const photoW = 70;
-        const photoH = 58;
+        const photoW = 80;
+        const photoH = 70;
         
         setFill(doc, PALETTE.lighterGray);
         doc.roundedRect(ctx.margin + 4, innerY - 2, photoW + 4, photoH + 4, 3, 3, 'F');
@@ -664,18 +664,34 @@ export const generatePlanPDFPremium = async (plan: ApiPlan): Promise<{ blob: Blo
           if (format) {
             const props = doc.getImageProperties(point.photoDataUrl);
             const ratio = props.width / props.height;
+            const boxRatio = photoW / photoH;
 
-            let dw = photoW - 4;
-            let dh = dw / ratio;
-            if (dh > photoH - 4) {
-              dh = photoH - 4;
+            // Draw the image as "cover" (cropped) so portrait screenshots don't become tiny.
+            let dw = photoW;
+            let dh = photoH;
+            let px = ctx.margin + 6;
+            let py = innerY;
+
+            if (ratio > boxRatio) {
+              // Wider image: fit height, crop left/right.
+              dh = photoH;
               dw = dh * ratio;
+              px = ctx.margin + 6 - (dw - photoW) / 2;
+              py = innerY;
+            } else {
+              // Taller image: fit width, crop top/bottom.
+              dw = photoW;
+              dh = dw / ratio;
+              px = ctx.margin + 6;
+              py = innerY - (dh - photoH) / 2;
             }
 
-            const px = ctx.margin + 6 + (photoW - dw) / 2;
-            const py = innerY + (photoH - dh) / 2;
-
+            doc.saveGraphicsState();
+            // Clip to the photo box (avoid overflow when we crop via "cover").
+            doc.roundedRect(ctx.margin + 6, innerY, photoW, photoH, 2, 2, null);
+            doc.clip();
             doc.addImage(point.photoDataUrl, format, px, py, dw, dh);
+            doc.restoreGraphicsState();
           }
         } catch {
           // Ignore photo rendering errors; we keep PDF export working.

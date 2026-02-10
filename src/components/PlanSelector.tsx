@@ -80,7 +80,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
         <div className="history__header mb-6">
           <div>
             <h2 className="text-xl font-bold">Sélectionner un chantier</h2>
-            <p className="text-sm text-text-muted mt-1">
+            <p className="text-sm text-muted mt-1">
               Vous devez d'abord choisir un chantier pour créer un rapport
             </p>
           </div>
@@ -98,9 +98,9 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
 
         {plans.length === 0 ? (
           <div className="text-center py-12">
-            <Map size={64} className="mx-auto mb-4 text-text-muted opacity-30" />
+            <Map size={64} className="mx-auto mb-4 text-muted opacity-30" />
             <h3 className="text-lg font-semibold mb-2">Aucun chantier disponible</h3>
-            <p className="text-sm text-text-muted mb-6">
+            <p className="text-sm text-muted mb-6">
               Vous devez d'abord créer un plan de chantier avant de pouvoir faire un rapport
             </p>
             <button className="btn btn--primary" onClick={onManagePlans}>
@@ -131,7 +131,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
                   </span>
                   <ChevronRight 
                     size={20} 
-                    className="text-text-muted group-hover:text-[#ffb703] transition-colors" 
+                    className="text-muted group-hover:text-[#ffb703] transition-colors" 
                   />
                 </div>
               </div>

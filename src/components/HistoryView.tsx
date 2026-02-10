@@ -6,6 +6,8 @@ import { ExportModal } from './ExportModal';
 import { branding } from '../config/branding';
 import { reportsApi, type ApiReport } from '../services/api';
 import { motion } from 'framer-motion';
+import { useToast } from '../contexts/ToastContext';
+import { ConfirmModal } from './ui/ConfirmModal';
 
 interface HistoryViewProps {
     onBack: () => void;
@@ -13,13 +15,18 @@ interface HistoryViewProps {
 
 export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
     const { reports, deleteReport, stats, isLoading, refreshReports } = useAuth();
+    const { toast } = useToast();
+
     const [searchQuery, setSearchQuery] = useState('');
     const [downloadingId, setDownloadingId] = useState<string | null>(null);
     const [sharingReport, setSharingReport] = useState<ApiReport | null>(null);
     const [showExport, setShowExport] = useState(false);
     const [loadingReports, setLoadingReports] = useState(false);
 
-    // Filtrer les rapports
+    // Confirm Modal State
+    const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+    // Filter logic
     const filteredReports = useMemo(() => reports.filter(report => {
         if (!searchQuery) return true;
         const query = searchQuery.toLowerCase();
@@ -47,12 +54,19 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
         };
     }, [refreshReports]);
 
-    const handleDelete = async (id: string) => {
-        if (!confirm('Supprimer ce rapport définitivement ?')) return;
+    const handleDeleteClick = (id: string) => {
+        setConfirmDeleteId(id);
+    };
+
+    const confirmDelete = async () => {
+        if (!confirmDeleteId) return;
         try {
-            await deleteReport(id);
+            await deleteReport(confirmDeleteId);
+            toast.success('Rapport supprimé avec succès');
         } catch (err) {
-            alert('Erreur lors de la suppression');
+            toast.error('Erreur lors de la suppression');
+        } finally {
+            setConfirmDeleteId(null);
         }
     };
 
@@ -95,8 +109,10 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
             a.click();
             document.body.removeChild(a);
             setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+
+            toast.success('PDF généré avec succès');
         } catch (err) {
-            alert('Erreur lors de la génération du PDF');
+            toast.error('Erreur lors de la génération du PDF');
         } finally {
             setDownloadingId(null);
         }
@@ -118,9 +134,9 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
     if (isLoading || loadingReports) {
         return (
             <div className="view">
-                <div className="card analysis" style={{ padding: '3rem' }}>
-                    <div className="spin" style={{ fontSize: '2rem', marginBottom: '1rem' }}>⏳</div>
-                    <p>Chargement...</p>
+                <div className="card analysis p-12 text-center">
+                    <div className="spin text-3xl mb-4">⏳</div>
+                    <p className="text-muted">Chargement de l'historique...</p>
                 </div>
             </div>
         );
@@ -133,11 +149,11 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
             >
-                <button onClick={onBack} className="link-btn" style={{ color: 'var(--text-muted)' }}>
+                <button onClick={onBack} className="link-btn text-muted">
                     <ArrowLeft size={16} /> Retour
                 </button>
                 <div className="stepper">
-                    <span className="stepper__item stepper__item--active" style={{ color: 'var(--primary)' }}>Historique Cloud</span>
+                    <span className="stepper__item stepper__item--active text-primary">Historique Cloud</span>
                 </div>
             </motion.div>
 
@@ -148,24 +164,23 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 0.1 }}
             >
-                <div className="stat-card" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-light)' }}>
-                    <span className="stat-value" style={{ color: 'var(--text-main)' }}>{stats.totalReports}</span>
+                <div className="stat-card bg-surface border-subtle">
+                    <span className="stat-value text-main">{stats.totalReports}</span>
                     <span className="stat-label">Rapports</span>
                 </div>
-                <div className="stat-card" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-light)' }}>
-                    <span className="stat-value" style={{ color: 'var(--warning)' }}>{stats.totalExtraWorks}</span>
+                <div className="stat-card bg-surface border-subtle">
+                    <span className="stat-value text-warning">{stats.totalExtraWorks}</span>
                     <span className="stat-label">Travaux Supp.</span>
                 </div>
-                <div className="stat-card" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-light)' }}>
-                    <span className="stat-value" style={{ color: 'var(--success)' }}>{stats.totalExtraValue.toLocaleString('fr-FR')}€</span>
+                <div className="stat-card bg-surface border-subtle">
+                    <span className="stat-value text-success">{stats.totalExtraValue.toLocaleString('fr-FR')}€</span>
                     <span className="stat-label">Valeur TS</span>
                 </div>
             </motion.div>
 
             {/* Search */}
             <motion.div
-                className="history__search"
-                style={{ marginBottom: '24px' }}
+                className="history__search mb-6"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.2 }}
@@ -175,29 +190,23 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Rechercher par chantier, client, adresse..."
-                    className="input"
-                    style={{
-                        background: 'var(--bg-surface)',
-                        border: '1px solid var(--border-light)',
-                        height: '50px',
-                        fontSize: '1rem'
-                    }}
+                    className="input-search"
                 />
             </motion.div>
 
             {/* Liste */}
-            <section className="card history" style={{ background: 'transparent', padding: 0, boxShadow: 'none' }}>
-                <div className="history__header" style={{ marginBottom: '16px', paddingLeft: '4px' }}>
-                    <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                        Mes Rapports <span style={{ color: 'var(--text-muted)', fontSize: '1rem' }}>({filteredReports.length})</span>
+            <section className="card history bg-transparent shadow-none p-0">
+                <div className="history__header mb-4 pl-1">
+                    <h2 className="text-xl font-semibold text-main">
+                        Mes Rapports <span className="text-base text-muted font-normal">({filteredReports.length})</span>
                     </h2>
                 </div>
 
                 {filteredReports.length === 0 ? (
-                    <div className="history__empty" style={{ background: 'var(--bg-surface)', padding: '4rem', borderRadius: 'var(--radius-md)' }}>
-                        <ClipboardList size={48} style={{ margin: '0 auto 16px', opacity: 0.5, color: 'var(--text-muted)' }} />
-                        <p style={{ color: 'var(--text-main)' }}>Aucun rapport trouvé.</p>
-                        <p className="detail-sub" style={{ marginTop: '8px' }}>
+                    <div className="history__empty bg-surface p-16 rounded-md text-center">
+                        <ClipboardList size={48} className="mx-auto mb-4 opacity-50 text-muted" />
+                        <p className="text-main">Aucun rapport trouvé.</p>
+                        <p className="detail-sub mt-2 text-muted">
                             {searchQuery ? 'Essayez une autre recherche' : 'Créez votre premier rapport'}
                         </p>
                     </div>
@@ -218,14 +227,9 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
                             return (
                                 <motion.article
                                     key={report.id}
-                                    className={`history-card ${isLocal ? 'history-card--local' : ''}`}
+                                    className={`history-card bg-surface border-subtle mb-3 ${isLocal ? 'history-card--local' : ''}`}
                                     variants={itemVariants}
                                     whileHover={{ y: -2, backgroundColor: 'var(--bg-surface-hover)' }}
-                                    style={{
-                                        background: 'var(--bg-surface)',
-                                        border: '1px solid var(--border-light)',
-                                        marginBottom: '12px'
-                                    }}
                                 >
                                     <div className="history-card__media">
                                         {report.imageDataUrl ? (
@@ -234,7 +238,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
                                                 alt="Aperçu"
                                                 loading="lazy"
                                                 decoding="async"
-                                                style={{ objectFit: 'cover' }}
+                                                className="object-cover"
                                             />
                                         ) : (
                                             <div className="history-card__placeholder">Aperçu indisponible</div>
@@ -242,10 +246,10 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
                                     </div>
                                     <div className="history-card__body">
                                         <div className="history-card__meta">
-                                            <span className="history-card__id" style={{ color: 'var(--primary)' }}>{report.reportId}</span>
-                                            <span className="history-card__date" style={{ color: 'var(--text-muted)' }}>{report.dateLabel}</span>
+                                            <span className="history-card__id text-primary">{report.reportId}</span>
+                                            <span className="history-card__date text-muted">{report.dateLabel}</span>
                                             {isLocal && (
-                                                <span className="badge badge--warning" style={{ marginTop: '4px' }}>
+                                                <span className="badge badge--warning mt-1">
                                                     <CloudOff size={12} />
                                                     En attente de synchro
                                                 </span>
@@ -253,14 +257,14 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
                                         </div>
                                         <div className="history-card__details">
                                             {report.siteName && (
-                                                <span style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '1.1rem' }}>{report.siteName}</span>
+                                                <span className="text-lg font-semibold text-main">{report.siteName}</span>
                                             )}
                                             {report.clientName && (
-                                                <span className="detail-sub" style={{ color: 'var(--text-muted)' }}>Client: {report.clientName}</span>
+                                                <span className="detail-sub text-muted">Client: {report.clientName}</span>
                                             )}
                                             <span className="detail-sub">{report.address}</span>
                                             {extraCount > 0 && (
-                                                <span className="badge badge--info" style={{ marginTop: '4px', width: 'fit-content' }}>
+                                                <span className="badge badge--info mt-1 w-fit">
                                                     <Euro size={12} />
                                                     {extraCount} TS • {Math.round(extraTotal).toLocaleString('fr-FR')}€
                                                 </span>
@@ -269,26 +273,24 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
                                     </div>
                                     <div className="history-card__actions">
                                         <button
-                                            className="btn btn--ghost"
+                                            className="btn btn--ghost text-muted"
                                             onClick={() => handleDownload(report)}
                                             disabled={downloadingId === report.id}
                                             title="Télécharger PDF"
-                                            style={{ color: 'var(--text-muted)' }}
                                         >
                                             {downloadingId === report.id ? '...' : <Download size={16} />}
                                         </button>
                                         <button
-                                            className="btn btn--ghost"
+                                            className="btn btn--ghost text-muted"
                                             onClick={() => setSharingReport(report)}
                                             title="Partager"
                                             disabled={isLocal}
-                                            style={{ color: 'var(--text-muted)' }}
                                         >
                                             <Share2 size={16} />
                                         </button>
                                         <button
                                             className="btn btn--ghost btn--danger"
-                                            onClick={() => handleDelete(report.id)}
+                                            onClick={() => handleDeleteClick(report.id)}
                                             title="Supprimer"
                                         >
                                             <Trash2 size={16} />
@@ -303,7 +305,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
 
             {/* Boutons d'export */}
             <motion.div
-                style={{ position: 'fixed', bottom: '24px', right: '24px', zIndex: 50 }}
+                className="fixed bottom-6 right-6 z-50"
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 whileHover={{ scale: 1.05 }}
@@ -339,6 +341,17 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
                     onClose={() => setShowExport(false)}
                 />
             )}
+
+            {/* Confirm Modal */}
+            <ConfirmModal
+                isOpen={!!confirmDeleteId}
+                onClose={() => setConfirmDeleteId(null)}
+                onConfirm={confirmDelete}
+                title="Supprimer le rapport ?"
+                message="Cette action est irréversible. Le rapport et toutes les données associées seront définitivement effacés."
+                confirmLabel="Supprimer"
+                isDestructive
+            />
         </div>
     );
 };

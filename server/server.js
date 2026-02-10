@@ -20,10 +20,33 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
-app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175'],
-  credentials: true
-}));
+const allowedOrigins = new Set(
+  [
+    process.env.FRONTEND_URL,
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://localhost:5175',
+  ].filter(Boolean)
+);
+
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true; // curl / server-to-server
+  if (allowedOrigins.has(origin)) return true;
+  try {
+    const { hostname } = new URL(origin);
+    // Allow Vercel preview deployments for demos.
+    return hostname.endsWith('.vercel.app');
+  } catch {
+    return false;
+  }
+};
+
+app.use(
+  cors({
+    origin: (origin, cb) => cb(null, isAllowedOrigin(origin)),
+    credentials: false,
+  })
+);
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
@@ -64,11 +87,19 @@ app.use((err, req, res, next) => {
 // Initialisation et démarrage
 const start = async () => {
   try {
-    // Initialiser la base de données
-    await initDb();
-    
-    // Vérifier la configuration email
-    await verifyEmailConfig();
+    // En production, éviter de relancer le SQL schema à chaque redémarrage
+    // (surtout si l'API est déployée en serverless). Lance `npm --prefix server run init-db` au besoin.
+    const shouldInitDb =
+      process.env.AUTO_INIT_DB === 'true' || process.env.NODE_ENV !== 'production';
+    if (shouldInitDb) {
+      await initDb();
+    }
+
+    const shouldVerifySmtp =
+      process.env.VERIFY_SMTP === 'true' || process.env.NODE_ENV !== 'production';
+    if (shouldVerifySmtp) {
+      await verifyEmailConfig();
+    }
     
     // Démarrer le serveur
     app.listen(PORT, () => {

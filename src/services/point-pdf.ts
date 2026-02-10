@@ -80,56 +80,193 @@ const categoryLabel = (category: string) => {
   return map[category] || category;
 };
 
-const renderMiniPlan = (plan: ApiPlan, point: ApiPlanPoint): Promise<string | null> => {
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+
+const roundRectPath = (
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number
+) => {
+  const radius = Math.max(0, Math.min(r, Math.min(w, h) / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + w - radius, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+  ctx.lineTo(x + w, y + h - radius);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+  ctx.lineTo(x + radius, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+};
+
+const renderPlanZoomWithInset = (
+  plan: ApiPlan,
+  point: ApiPlanPoint,
+  opts: { aspect: number }
+): Promise<string | null> => {
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
 
     img.onload = () => {
       const canvas = document.createElement('canvas');
-      const maxWidth = 1600;
-      const scale = Math.min(1, maxWidth / img.width);
+      const aspect = clamp(opts.aspect || 1.6, 0.8, 2.6);
+      const outW = 1600;
+      const outH = Math.max(800, Math.round(outW / aspect));
 
-      canvas.width = Math.round(img.width * scale);
-      canvas.height = Math.round(img.height * scale);
+      canvas.width = outW;
+      canvas.height = outH;
 
       const ctx = canvas.getContext('2d');
       if (!ctx) return resolve(null);
 
+      const centerX = (point.positionX / 100) * img.width;
+      const centerY = (point.positionY / 100) * img.height;
+
+      // Crop a region around the point to avoid the plan feeling "too zoomed out".
+      // Keep enough context while making the marker readable on mobile PDF viewers.
+      let cropW = Math.min(img.width, Math.max(520, img.width * 0.38));
+      let cropH = cropW / aspect;
+      if (cropH > img.height) {
+        cropH = img.height;
+        cropW = cropH * aspect;
+      }
+
+      const sx = clamp(centerX - cropW / 2, 0, img.width - cropW);
+      const sy = clamp(centerY - cropH / 2, 0, img.height - cropH);
+
       // White base
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillRect(0, 0, outW, outH);
 
-      // Plan image
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      // Main zoomed plan
+      ctx.drawImage(img, sx, sy, cropW, cropH, 0, 0, outW, outH);
 
-      // Marker
-      const x = (point.positionX / 100) * canvas.width;
-      const y = (point.positionY / 100) * canvas.height;
-      const r = Math.max(12, Math.round(canvas.width * 0.014));
+      // Marker in zoomed view
+      const mx = ((centerX - sx) / cropW) * outW;
+      const my = ((centerY - sy) / cropH) * outH;
+      const r = Math.max(26, Math.round(outW * 0.028));
 
       ctx.save();
       ctx.shadowColor = 'rgba(0,0,0,0.35)';
-      ctx.shadowBlur = r * 0.6;
+      ctx.shadowBlur = r * 0.75;
       ctx.shadowOffsetX = r * 0.12;
       ctx.shadowOffsetY = r * 0.2;
 
       ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(255,183,3,0.92)';
+      ctx.arc(mx, my, r, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,183,3,0.95)';
       ctx.fill();
 
       ctx.shadowColor = 'transparent';
-      ctx.lineWidth = 4;
+      ctx.lineWidth = Math.max(4, Math.round(r * 0.18));
       ctx.strokeStyle = 'rgba(26,54,93,0.95)';
       ctx.stroke();
 
+      // Inner dot
+      ctx.beginPath();
+      ctx.arc(mx, my, Math.max(4, Math.round(r * 0.22)), 0, Math.PI * 2);
       ctx.fillStyle = '#111827';
-      ctx.font = `bold ${Math.max(14, Math.round(r * 1.05))}px Arial`;
+      ctx.fill();
+
+      // Number
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `800 ${Math.max(18, Math.round(r * 0.9))}px Arial, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(String(point.pointNumber), x, y + 1);
+      ctx.fillText(String(point.pointNumber), mx, my + 1);
+      ctx.restore();
 
+      // Inset overview (full plan + crop rectangle), positioned opposite to the marker quadrant.
+      const insetW = Math.round(outW * 0.24);
+      const insetH = Math.round(outH * 0.24);
+      const insetMargin = Math.round(outW * 0.02);
+
+      const markerRight = mx > outW / 2;
+      const markerBottom = my > outH / 2;
+      const placeLeft = markerRight; // opposite quadrant
+      const placeTop = markerBottom;
+
+      const insetX = placeLeft ? insetMargin : outW - insetMargin - insetW;
+      const insetY = placeTop ? insetMargin : outH - insetMargin - insetH;
+
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.25)';
+      ctx.shadowBlur = 20;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 10;
+
+      roundRectPath(ctx, insetX, insetY, insetW, insetH, 16);
+      ctx.fillStyle = 'rgba(255,255,255,0.96)';
+      ctx.fill();
+
+      ctx.shadowColor = 'transparent';
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(26,54,93,0.25)';
+      ctx.stroke();
+      ctx.restore();
+
+      // Plan image inside inset (preserve aspect)
+      const pad = 12;
+      const boxX = insetX + pad;
+      const boxY = insetY + pad;
+      const boxW = insetW - pad * 2;
+      const boxH = insetH - pad * 2;
+
+      const planRatio = img.width / img.height;
+      const boxRatio = boxW / boxH;
+
+      let drawW = boxW;
+      let drawH = boxH;
+      let drawX = boxX;
+      let drawY = boxY;
+      if (planRatio > boxRatio) {
+        drawH = boxW / planRatio;
+        drawY = boxY + (boxH - drawH) / 2;
+      } else {
+        drawW = boxH * planRatio;
+        drawX = boxX + (boxW - drawW) / 2;
+      }
+
+      ctx.save();
+      ctx.beginPath();
+      roundRectPath(ctx, boxX, boxY, boxW, boxH, 10);
+      ctx.clip();
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(boxX, boxY, boxW, boxH);
+      ctx.drawImage(img, 0, 0, img.width, img.height, drawX, drawY, drawW, drawH);
+      ctx.restore();
+
+      // Crop rectangle overlay on inset
+      const scaleX = drawW / img.width;
+      const scaleY = drawH / img.height;
+      const rectX = drawX + sx * scaleX;
+      const rectY = drawY + sy * scaleY;
+      const rectW = cropW * scaleX;
+      const rectH = cropH * scaleY;
+
+      ctx.save();
+      ctx.fillStyle = 'rgba(255,183,3,0.14)';
+      ctx.fillRect(rectX, rectY, rectW, rectH);
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = 'rgba(255,183,3,0.95)';
+      ctx.strokeRect(rectX, rectY, rectW, rectH);
+
+      // Point dot in inset
+      const ix = drawX + centerX * scaleX;
+      const iy = drawY + centerY * scaleY;
+      ctx.beginPath();
+      ctx.arc(ix, iy, 6, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,183,3,0.95)';
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(26,54,93,0.95)';
+      ctx.stroke();
       ctx.restore();
 
       resolve(canvas.toDataURL('image/jpeg', 0.9));
@@ -259,70 +396,92 @@ export const generatePointPDF = async (
   y += photoBoxH + 18;
 
   // Description
-  const descTitleY = y;
   setText(doc, palette.dark);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.text('Description', margin, descTitleY);
-  y += 12;
+  doc.text('Description', margin, y);
+  y += 18;
 
   const descText = (point.description || '').trim() || 'Aucune description.';
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   setText(doc, palette.dark);
   const descLines = doc.splitTextToSize(descText, pageWidth - margin * 2);
-
   const footerReserve = 70;
-  const available = Math.max(60, pageHeight - y - footerReserve);
   const lineH = 12;
-  const maxLines = Math.max(1, Math.floor(available / lineH));
-  const firstChunk = descLines.slice(0, maxLines);
-  const rest = descLines.slice(maxLines);
-  doc.text(firstChunk, margin, y + 10);
-  y += Math.max(28, firstChunk.length * lineH + 12);
 
-  // Mini plan (if fits)
-  const miniPlan = await renderMiniPlan(plan, point);
-  if (miniPlan && rest.length === 0) {
-    const miniW = 190;
-    const miniH = 130;
-    const miniX = pageWidth - margin - miniW;
-    const miniY = pageHeight - 220;
-    if (miniY > y + 18) {
-      setText(doc, palette.gray);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
-      doc.text('Localisation sur le plan', miniX, miniY - 8);
-      setFill(doc, palette.surfaceAlt);
-      doc.rect(miniX, miniY, miniW, miniH, 'F');
-      setDraw(doc, palette.line);
-      doc.rect(miniX, miniY, miniW, miniH, 'S');
-      try {
-        doc.addImage(miniPlan, 'JPEG', miniX, miniY, miniW, miniH);
-      } catch {
-        // ignore
-      }
-    }
-  }
-
-  // Continuation page if description overflow
-  if (rest.length > 0) {
-    doc.addPage();
+  const drawTopBar = (title: string) => {
     setFill(doc, palette.primary);
     doc.rect(0, 0, pageWidth, 64, 'F');
     setText(doc, palette.white);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(14);
-    doc.text('Description (suite)', margin, 40);
+    doc.text(title, margin, 40);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     setText(doc, [210, 214, 220]);
     doc.text(`${plan.siteName}  •  Point #${point.pointNumber}`, margin, 56);
+  };
 
-    setText(doc, palette.dark);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.text(rest, margin, 92);
+  // Paginate description if needed (avoid overflowing a single page)
+  let remaining = [...descLines];
+  while (remaining.length > 0) {
+    const available = Math.max(24, pageHeight - y - footerReserve);
+    const linesFit = Math.max(1, Math.floor(available / lineH));
+    const chunk = remaining.slice(0, linesFit);
+    doc.text(chunk, margin, y);
+    remaining = remaining.slice(linesFit);
+    y += chunk.length * lineH + 18;
+
+    if (remaining.length > 0) {
+      doc.addPage();
+      drawTopBar('Description (suite)');
+      setText(doc, palette.dark);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      y = 92;
+    }
+  }
+
+  // Localisation on plan: render a zoomed view (plus inset overview) so it’s readable on mobile.
+  const planBoxW = pageWidth - margin * 2;
+  const minPlanH = 180;
+  const maxPlanH = 260;
+
+  // If we don't have enough room on this page, move to a dedicated page.
+  const spaceForTitleAndGap = 26;
+  const availableForPlan = pageHeight - y - footerReserve;
+  const needsNewPage = availableForPlan < minPlanH + spaceForTitleAndGap;
+  if (needsNewPage) {
+    doc.addPage();
+    drawTopBar('Localisation sur le plan');
+    y = 92;
+  } else {
+    y += 6;
+  }
+
+  setText(doc, palette.gray);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.text('Localisation sur le plan', margin, y);
+  y += 12;
+
+  const planAvailableH = pageHeight - y - footerReserve;
+  const planBoxH = Math.max(minPlanH, Math.min(maxPlanH, planAvailableH));
+  const aspect = planBoxW / planBoxH;
+  const planZoom = await renderPlanZoomWithInset(plan, point, { aspect });
+
+  setFill(doc, palette.surfaceAlt);
+  doc.rect(margin, y, planBoxW, planBoxH, 'F');
+  setDraw(doc, palette.line);
+  doc.rect(margin, y, planBoxW, planBoxH, 'S');
+
+  if (planZoom) {
+    try {
+      doc.addImage(planZoom, 'JPEG', margin, y, planBoxW, planBoxH);
+    } catch {
+      // ignore
+    }
   }
 
   // Footers
@@ -340,4 +499,3 @@ export const generatePointPDF = async (
   const filename = `Point_${plan.siteName.replace(/\s+/g, '_')}_#${point.pointNumber}.pdf`;
   return { blob: doc.output('blob'), filename };
 };
-

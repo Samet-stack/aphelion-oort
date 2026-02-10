@@ -53,7 +53,7 @@ export const VerifyEmail: React.FC = () => {
                 <Loader2 size={32} className="text-[#ffb703] spin" />
               </div>
               <h2 className="text-xl font-bold mb-2">Vérification en cours...</h2>
-              <p className="text-text-muted">{message}</p>
+              <p className="text-muted">{message}</p>
             </>
           )}
 
@@ -63,8 +63,8 @@ export const VerifyEmail: React.FC = () => {
                 <Check size={32} className="text-green-500" />
               </div>
               <h2 className="text-xl font-bold mb-2 text-green-500">Email vérifié !</h2>
-              <p className="text-text-muted mb-4">{message}</p>
-              <p className="text-sm text-text-muted">Redirection vers la connexion...</p>
+              <p className="text-muted mb-4">{message}</p>
+              <p className="text-sm text-muted">Redirection vers la connexion...</p>
             </>
           )}
 
@@ -74,7 +74,7 @@ export const VerifyEmail: React.FC = () => {
                 <AlertCircle size={32} className="text-red-500" />
               </div>
               <h2 className="text-xl font-bold mb-2 text-red-500">Erreur</h2>
-              <p className="text-text-muted mb-6">{message}</p>
+              <p className="text-muted mb-6">{message}</p>
               <button
                 onClick={() => navigate('/login')}
                 className="btn btn--primary"
@@ -134,7 +134,7 @@ export const ResendVerification: React.FC<ResendVerificationProps> = ({ email, o
             <Mail size={24} className="text-[#ffb703]" />
           </div>
           <h3 className="text-lg font-bold mb-2">Vérification requise</h3>
-          <p className="text-text-muted mb-4">
+          <p className="text-muted mb-4">
             Votre email n'est pas encore vérifié. Veuillez cliquer sur le lien dans l'email de confirmation.
           </p>
           

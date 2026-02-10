@@ -3,6 +3,8 @@ import { ArrowLeft, Plus, Map, Trash2, ZoomIn, ZoomOut, FileText, Loader2, Uploa
 import { plansApi, ApiPlan, ApiPlanPoint, ApiPlanListItem } from '../services/api';
 import { PlanPointFormData } from './PlanPointForm';
 import { PlanPointPanel } from './PlanPointPanel';
+import { useToast } from '../contexts/ToastContext';
+import { ConfirmModal } from './ui/ConfirmModal';
 
 interface PlanViewProps {
   onBack: () => void;
@@ -127,9 +129,20 @@ const PinMarker: React.FC<{
 };
 
 export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
+  const { toast } = useToast();
 
   // Sub-views
   const [subView, setSubView] = useState<SubView>('LIST');
+
+  // Confirm dialog (centralized: avoid native confirm() which breaks the premium feel)
+  const [confirmState, setConfirmState] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    isDestructive?: boolean;
+    onConfirm: () => void | Promise<void>;
+  } | null>(null);
 
   // List
   const [plans, setPlans] = useState<ApiPlanListItem[]>([]);
@@ -204,7 +217,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
       setClickPosition(null);
     } catch (err) {
       console.error('Error loading plan:', err);
-      alert('Erreur lors du chargement du plan.');
+      toast.error('Erreur lors du chargement du plan.');
     } finally {
       setLoadingPlan(false);
     }
@@ -212,14 +225,23 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
 
   const handleDeletePlan = async (planId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!window.confirm('Supprimer ce plan et tous ses points ?')) return;
-    try {
-      await plansApi.deletePlan(planId);
-      setPlans((prev) => prev.filter((p) => p.id !== planId));
-    } catch (err) {
-      console.error('Error deleting plan:', err);
-      alert('Erreur lors de la suppression.');
-    }
+    setConfirmState({
+      title: 'Supprimer ce plan ?',
+      message: 'Supprimer ce plan et tous ses points. Cette action est irréversible.',
+      confirmLabel: 'Supprimer',
+      cancelLabel: 'Annuler',
+      isDestructive: true,
+      onConfirm: async () => {
+        try {
+          await plansApi.deletePlan(planId);
+          setPlans((prev) => prev.filter((p) => p.id !== planId));
+          toast.success('Plan supprimé.');
+        } catch (err) {
+          console.error('Error deleting plan:', err);
+          toast.error('Erreur lors de la suppression du plan.');
+        }
+      },
+    });
   };
 
   // Upload handlers
@@ -259,9 +281,10 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
       setUploadSiteName('');
       setUploadAddress('');
       setUploadImageDataUrl('');
+      toast.success('Plan créé.');
     } catch (err) {
       console.error('Error creating plan:', err);
-      alert('Erreur lors de la creation du plan.');
+      toast.error('Erreur lors de la création du plan.');
     } finally {
       setUploading(false);
     }
@@ -317,9 +340,10 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
         setSelectedPoint(updated);
         setEditingPoint(null);
         setPanelMode('detail');
+        toast.success('Point mis à jour.');
       } catch (err) {
         console.error('Error updating point:', err);
-        alert('Erreur lors de la mise a jour.');
+        toast.error('Erreur lors de la mise à jour du point.');
       }
     } else if (clickPosition) {
       // Create
@@ -335,14 +359,15 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
         setSelectedPoint(newPoint);
         setPanelMode('detail');
         setClickPosition(null);
+        toast.success('Point ajouté.');
       } catch (err) {
         console.error('Error creating point:', err);
-        alert('Erreur lors de la creation du point.');
+        toast.error('Erreur lors de la création du point.');
       }
     }
   };
 
-  const handleDeletePoint = async (pointId: string) => {
+  const performDeletePoint = async (pointId: string) => {
     if (!currentPlan) return;
     try {
       await plansApi.deletePoint(currentPlan.id, pointId);
@@ -352,10 +377,26 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
       setPanelMode('closed');
       setSelectedPoint(null);
       setEditingPoint(null);
+      toast.success('Point supprimé.');
     } catch (err) {
       console.error('Error deleting point:', err);
-      alert('Erreur lors de la suppression.');
+      toast.error('Erreur lors de la suppression du point.');
     }
+  };
+
+  const handleDeletePoint = (pointId: string) => {
+    if (!currentPlan) return;
+    const point = currentPlan.points.find((p) => p.id === pointId);
+    setConfirmState({
+      title: point ? `Supprimer le point #${point.pointNumber} ?` : 'Supprimer ce point ?',
+      message: point
+        ? `Supprimer le point "${point.title}". Cette action est irréversible.`
+        : 'Cette action est irréversible.',
+      confirmLabel: 'Supprimer',
+      cancelLabel: 'Annuler',
+      isDestructive: true,
+      onConfirm: async () => performDeletePoint(pointId),
+    });
   };
 
   const handleEditFromDetail = () => {
@@ -396,9 +437,10 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
       setSelectedPoint(updated);
       setEditingPoint(null);
       setPanelMode('detail');
+      toast.success('Statut mis à jour.');
     } catch (err) {
       console.error('Error updating status:', err);
-      alert('Erreur lors de la mise a jour du statut.');
+      toast.error('Erreur lors de la mise à jour du statut.');
     }
   };
 
@@ -419,9 +461,10 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
         document.body.removeChild(a);
       }
       setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      toast.success('PDF généré.');
     } catch (err) {
       console.error('Error generating point PDF:', err);
-      alert('Erreur lors de la generation du PDF du point.');
+      toast.error('Erreur lors de la génération du PDF du point.');
     }
   };
 
@@ -458,9 +501,10 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
         document.body.removeChild(a);
       }
       setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      toast.success('PDF généré.');
     } catch (err) {
       console.error('Error generating PDF:', err);
-      alert('Erreur lors de la generation du PDF.');
+      toast.error('Erreur lors de la génération du PDF.');
     } finally {
       setGeneratingPdf(false);
     }
@@ -478,87 +522,101 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
   // LIST view
   if (subView === 'LIST') {
     return (
-      <div className="view">
-        <div className="view__top">
-          <button onClick={onBack} className="link-btn">
-            <ArrowLeft size={16} /> Accueil
-          </button>
-        </div>
-
-        <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <div>
-              <h2 style={{ fontSize: '1.3rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Map size={22} /> Plans & Points
-              </h2>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '4px' }}>
-                {plans.length} plan(s) enregistre(s)
-              </p>
-            </div>
-            <button className="btn btn--primary" onClick={() => setSubView('UPLOAD')}>
-              <Plus size={16} /> Nouveau plan
+      <>
+        <div className="view">
+          <div className="view__top">
+            <button onClick={onBack} className="link-btn">
+              <ArrowLeft size={16} /> Accueil
             </button>
           </div>
 
-          {loadingPlans ? (
-            <div style={{ textAlign: 'center', padding: '40px 0' }}>
-              <Loader2 size={24} className="spin" />
-              <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>Chargement...</p>
+          <div className="card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <div>
+                <h2 style={{ fontSize: '1.3rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Map size={22} /> Plans & Points
+                </h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '4px' }}>
+                  {plans.length} plan(s) enregistre(s)
+                </p>
+              </div>
+              <button className="btn btn--primary" onClick={() => setSubView('UPLOAD')}>
+                <Plus size={16} /> Nouveau plan
+              </button>
             </div>
-          ) : plans.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>
-              <Map size={40} style={{ opacity: 0.3, marginBottom: '12px' }} />
-              <p>Aucun plan pour le moment.</p>
-              <p style={{ fontSize: '0.85rem' }}>Cliquez sur "Nouveau plan" pour commencer.</p>
-            </div>
-          ) : (
-            <div className="plan-list">
-              {plans.map((plan) => (
-                <div key={plan.id} className="plan-card" onClick={() => openPlan(plan.id)}>
-                  <div className="plan-card__info">
-                    <span className="plan-card__name">{plan.siteName}</span>
-                    <span className="plan-card__meta">
-                      {plan.address && `${plan.address} · `}
-                      {new Date(plan.createdAt).toLocaleDateString('fr-FR')}
-                    </span>
+
+            {loadingPlans ? (
+              <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                <Loader2 size={24} className="spin" />
+                <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>Chargement...</p>
+              </div>
+            ) : plans.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>
+                <Map size={40} style={{ opacity: 0.3, marginBottom: '12px' }} />
+                <p>Aucun plan pour le moment.</p>
+                <p style={{ fontSize: '0.85rem' }}>Cliquez sur "Nouveau plan" pour commencer.</p>
+              </div>
+            ) : (
+              <div className="plan-list">
+                {plans.map((plan) => (
+                  <div key={plan.id} className="plan-card" onClick={() => openPlan(plan.id)}>
+                    <div className="plan-card__info">
+                      <span className="plan-card__name">{plan.siteName}</span>
+                      <span className="plan-card__meta">
+                        {plan.address && `${plan.address} · `}
+                        {new Date(plan.createdAt).toLocaleDateString('fr-FR')}
+                      </span>
+                    </div>
+                    <div className="plan-card__badge">
+                      <span className="badge badge--info">{plan.pointsCount} point(s)</span>
+                      <button
+                        className="btn btn--ghost"
+                        onClick={(e) => handleDeletePlan(plan.id, e)}
+                        style={{ color: 'var(--danger)', padding: '4px' }}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </div>
-                  <div className="plan-card__badge">
-                    <span className="badge badge--info">{plan.pointsCount} point(s)</span>
-                    <button
-                      className="btn btn--ghost"
-                      onClick={(e) => handleDeletePlan(plan.id, e)}
-                      style={{ color: 'var(--danger)', padding: '4px' }}
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
+            )}
+          </div>
+
+          {loadingPlan && (
+            <div className="modal-overlay">
+              <div style={{ textAlign: 'center', color: 'white' }}>
+                <Loader2 size={32} className="spin" />
+                <p style={{ marginTop: '12px' }}>Chargement du plan...</p>
+              </div>
             </div>
           )}
         </div>
 
-        {loadingPlan && (
-          <div className="modal-overlay">
-            <div style={{ textAlign: 'center', color: 'white' }}>
-              <Loader2 size={32} className="spin" />
-              <p style={{ marginTop: '12px' }}>Chargement du plan...</p>
-            </div>
-          </div>
-        )}
-      </div>
+        <ConfirmModal
+          isOpen={!!confirmState}
+          onClose={() => setConfirmState(null)}
+          onConfirm={async () => confirmState?.onConfirm()}
+          title={confirmState?.title ?? ''}
+          message={confirmState?.message ?? ''}
+          confirmLabel={confirmState?.confirmLabel}
+          cancelLabel={confirmState?.cancelLabel}
+          isDestructive={confirmState?.isDestructive}
+        />
+      </>
     );
   }
 
   // UPLOAD view
   if (subView === 'UPLOAD') {
     return (
-      <div className="view">
-        <div className="view__top">
-          <button onClick={() => setSubView('LIST')} className="link-btn">
-            <ArrowLeft size={16} /> Retour
-          </button>
-        </div>
+      <>
+        <div className="view">
+          <div className="view__top">
+            <button onClick={() => setSubView('LIST')} className="link-btn">
+              <ArrowLeft size={16} /> Retour
+            </button>
+          </div>
 
         <div className="card">
           <h2 style={{ fontSize: '1.3rem', fontWeight: 800, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -642,7 +700,19 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
             </button>
           </div>
         </div>
-      </div>
+        </div>
+
+        <ConfirmModal
+          isOpen={!!confirmState}
+          onClose={() => setConfirmState(null)}
+          onConfirm={async () => confirmState?.onConfirm()}
+          title={confirmState?.title ?? ''}
+          message={confirmState?.message ?? ''}
+          confirmLabel={confirmState?.confirmLabel}
+          cancelLabel={confirmState?.cancelLabel}
+          isDestructive={confirmState?.isDestructive}
+        />
+      </>
     );
   }
 
@@ -672,7 +742,8 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
     const completionRate = totalPoints > 0 ? Math.round((donePoints / totalPoints) * 100) : 0;
 
     return (
-      <div className="view">
+      <>
+        <div className="view">
         <div className="view__top">
           <button onClick={handleBackFromViewer} className="link-btn">
             <ArrowLeft size={16} /> Mes plans
@@ -967,7 +1038,19 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
             onUpdateStatus={handleUpdatePointStatus}
           />
         </div>
-      </div>
+        </div>
+
+        <ConfirmModal
+          isOpen={!!confirmState}
+          onClose={() => setConfirmState(null)}
+          onConfirm={async () => confirmState?.onConfirm()}
+          title={confirmState?.title ?? ''}
+          message={confirmState?.message ?? ''}
+          confirmLabel={confirmState?.confirmLabel}
+          cancelLabel={confirmState?.cancelLabel}
+          isDestructive={confirmState?.isDestructive}
+        />
+      </>
     );
   }
 

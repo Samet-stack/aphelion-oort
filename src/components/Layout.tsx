@@ -46,9 +46,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <div className="status-row">
                     {isAuthenticated && user && <OfflineStatusDot />}
                     {isAuthenticated && user ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                             <div className="status-user" title={user.email}>
-                                <User size={18} color="var(--primary)" />
+                                <User size={20} color="var(--primary)" />
                                 <span className="status-user__name">{user.firstName || user.email}</span>
                             </div>
                             <button

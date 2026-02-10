@@ -73,9 +73,7 @@ export const PlanPointPanel: React.FC<PlanPointPanelProps> = ({
 
   const handleDelete = () => {
     if (!point) return;
-    if (window.confirm(`Supprimer le point "${point.title}" ?`)) {
-      onDelete(point.id);
-    }
+    onDelete(point.id);
   };
 
   // Title

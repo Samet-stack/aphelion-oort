@@ -87,10 +87,19 @@ const fetchWithAuth = async (
     headers['Authorization'] = `Bearer ${token}`;
   }
   
-  const response = await fetch(`${API_URL}${endpoint}`, {
-    ...options,
-    headers
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${endpoint}`, {
+      ...options,
+      headers
+    });
+  } catch {
+    throw createApiError(0, {
+      success: false,
+      message:
+        "Impossible de contacter le serveur. Vérifiez que l'API est en ligne (localhost:3001) ou que VITE_API_URL est correct.",
+    });
+  }
 
   let data: ApiResponse;
   try {
@@ -118,18 +127,15 @@ export const authApi = {
     lastName?: string;
     companyName?: string;
   }): Promise<{ userId: string; emailSent: boolean; preview?: boolean }> => {
-    const response = await fetch(`${API_URL}/auth/register`, {
+    const response = await fetchWithAuth('/auth/register', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(userData)
     });
-    
-    const data = await response.json();
-    
-    if (data.success && data.data) {
-      return data.data;
+
+    if (response.success && response.data) {
+      return response.data;
     }
-    throw new Error(data.message || 'Erreur lors de l\'inscription');
+    throw new Error(response.message || 'Erreur lors de l\'inscription');
   },
   
   login: async (email: string, password: string): Promise<{ user: User; token: string; needsVerification?: boolean }> => {

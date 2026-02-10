@@ -1,1 +1,22 @@
 node_modules
+
+# Build outputs
+dist
+
+# Local logs / pids
+*.log
+*.pid
+
+# Environment files (never commit secrets)
+.env
+.env.*
+!.env.example
+server/.env
+server/.env.*
+!server/.env.example
+
+# Vercel
+.vercel
+
+# macOS
+.DS_Store

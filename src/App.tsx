@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ToastProvider } from './contexts/ToastContext';
 import { Layout } from './components/Layout';
 import { Hero } from './components/Hero';
 import { CameraView } from './components/CameraView';
@@ -151,13 +152,15 @@ function AppContent() {
 function App() {
   return (
     <AuthProvider>
-      <Routes>
-        <Route path="/" element={<AppContent />} />
-        <Route path="/login" element={<AppContent />} />
-        <Route path="/register-success" element={<RegisterSuccess />} />
-        <Route path="/verify-email" element={<VerifyEmail />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <ToastProvider>
+        <Routes>
+          <Route path="/" element={<AppContent />} />
+          <Route path="/login" element={<AppContent />} />
+          <Route path="/register-success" element={<RegisterSuccess />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </ToastProvider>
     </AuthProvider>
   );
 }
