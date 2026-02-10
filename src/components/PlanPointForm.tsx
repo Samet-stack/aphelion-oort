@@ -46,18 +46,27 @@ const fileToDataUrl = (file: File): Promise<string> => {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = (e) => {
+      const src = e.target?.result as string;
       const img = new Image();
       img.onload = () => {
         // Screenshots (PNG) need more resolution and lossless encoding to keep text readable in PDFs.
         const isPng = file.type === 'image/png';
-        const maxW = isPng ? 2000 : 2000;
-        const maxH = isPng ? 2400 : 2000;
+        const maxW = isPng ? 2400 : 2000;
+        const maxH = isPng ? 3200 : 2000;
         const jpegQuality = 0.88;
 
         const canvas = document.createElement('canvas');
         let w = img.width;
         let h = img.height;
-        if (w > maxW || h > maxH) {
+        const needsResize = w > maxW || h > maxH;
+
+        // Avoid touching PNG screenshots if we don't need to resize them (keeps text crisp).
+        if (isPng && !needsResize) {
+          resolve(src);
+          return;
+        }
+
+        if (needsResize) {
           const ratio = Math.min(maxW / w, maxH / h);
           w = Math.round(w * ratio);
           h = Math.round(h * ratio);
@@ -65,12 +74,12 @@ const fileToDataUrl = (file: File): Promise<string> => {
         canvas.width = w;
         canvas.height = h;
         const ctx = canvas.getContext('2d')!;
-        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingEnabled = needsResize;
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, 0, 0, w, h);
         resolve(isPng ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', jpegQuality));
       };
-      img.src = e.target?.result as string;
+      img.src = src;
     };
     reader.readAsDataURL(file);
   });

@@ -130,7 +130,8 @@ const renderPlanZoomWithInset = (
 
       // Crop a region around the point to avoid the plan feeling "too zoomed out".
       // Keep enough context while making the marker readable on mobile PDF viewers.
-      let cropW = Math.min(img.width, Math.max(520, img.width * 0.38));
+      // Zoom a bit more than before: conducteurs de travaux need the marker area readable.
+      let cropW = Math.min(img.width, Math.max(420, img.width * 0.28));
       let cropH = cropW / aspect;
       if (cropH > img.height) {
         cropH = img.height;

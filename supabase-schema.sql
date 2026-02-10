@@ -49,17 +49,65 @@ for each row
 execute function public.set_updated_at();
 
 -- ==========================================================
+-- TABLE: SITES (Chantiers)
+-- ==========================================================
+create table if not exists public.sites (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+  site_name text not null,
+  address text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+drop trigger if exists trg_sites_updated_at on public.sites;
+create trigger trg_sites_updated_at
+before update on public.sites
+for each row
+execute function public.set_updated_at();
+
+-- ==========================================================
 -- TABLE: PLANS (Plans de chantier)
 -- ==========================================================
 create table if not exists public.plans (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.users(id) on delete cascade,
+  site_id uuid references public.sites(id) on delete cascade,
+  plan_name text not null default 'Plan principal',
   site_name text not null,
   address text,
   image_data_url text not null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- Ensure new columns exist (legacy DBs)
+alter table public.plans
+  add column if not exists site_id uuid references public.sites(id) on delete cascade;
+
+alter table public.plans
+  add column if not exists plan_name text;
+
+update public.plans
+set plan_name = 'Plan principal'
+where plan_name is null;
+
+alter table public.plans
+  alter column plan_name set default 'Plan principal';
+
+alter table public.plans
+  alter column plan_name set not null;
+
+-- One-time migration: create a site per legacy plan if site_id is missing.
+insert into public.sites (id, user_id, site_name, address, created_at, updated_at)
+select p.id, p.user_id, p.site_name, p.address, p.created_at, p.updated_at
+from public.plans p
+where p.site_id is null
+  and not exists (select 1 from public.sites s where s.id = p.id);
+
+update public.plans
+set site_id = id
+where site_id is null;
 
 drop trigger if exists trg_plans_updated_at on public.plans;
 create trigger trg_plans_updated_at
@@ -122,10 +170,20 @@ create table if not exists public.reports (
   category text,
   integrity_hash text,
   client_signature text,
+  site_id uuid references public.sites(id) on delete set null,
   -- Liens vers les plans/points (nouvelles colonnes)
   plan_id uuid references public.plans(id) on delete set null,
   plan_point_id uuid references public.plan_points(id) on delete set null
 );
+
+alter table public.reports
+  add column if not exists site_id uuid references public.sites(id) on delete set null;
+
+alter table public.reports
+  add column if not exists plan_id uuid references public.plans(id) on delete set null;
+
+alter table public.reports
+  add column if not exists plan_point_id uuid references public.plan_points(id) on delete set null;
 
 -- ==========================================================
 -- TABLE: EXTRA_WORKS (Travaux supplémentaires)
@@ -181,7 +239,12 @@ create index if not exists idx_users_email on public.users(email);
 
 -- Plans
 create index if not exists idx_plans_user on public.plans(user_id);
+create index if not exists idx_plans_site on public.plans(site_id);
 create index if not exists idx_plans_created on public.plans(created_at desc);
+
+-- Sites
+create index if not exists idx_sites_user on public.sites(user_id);
+create index if not exists idx_sites_created on public.sites(created_at desc);
 
 -- Plan Points
 create index if not exists idx_plan_points_plan on public.plan_points(plan_id);
@@ -193,6 +256,7 @@ create index if not exists idx_reports_user on public.reports(user_id);
 create index if not exists idx_reports_date on public.reports(created_at desc);
 create index if not exists idx_reports_user_date on public.reports(user_id, created_at desc);
 create index if not exists idx_reports_user_category on public.reports(user_id, category);
+create index if not exists idx_reports_site on public.reports(site_id);
 create index if not exists idx_reports_plan on public.reports(plan_id);
 create index if not exists idx_reports_plan_point on public.reports(plan_point_id);
 

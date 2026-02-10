@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { ArrowLeft, Plus, Map, Trash2, ZoomIn, ZoomOut, FileText, Loader2, Upload, Camera, ChevronRight, ClipboardList, Search, Play, CheckCircle2 } from 'lucide-react';
-import { plansApi, ApiPlan, ApiPlanPoint, ApiPlanListItem } from '../services/api';
+import { ArrowLeft, Plus, Map, Trash2, ZoomIn, ZoomOut, FileText, Loader2, Upload, Camera, ChevronRight, ClipboardList, Search, Play, CheckCircle2, Building2, Layers, FilePlus } from 'lucide-react';
+import { plansApi, sitesApi, ApiPlan, ApiPlanPoint, ApiPlanListItem, ApiSite, ApiSiteListItem } from '../services/api';
 import { PlanPointFormData } from './PlanPointForm';
 import { PlanPointPanel } from './PlanPointPanel';
 import { useToast } from '../contexts/ToastContext';
@@ -9,9 +9,12 @@ import { ConfirmModal } from './ui/ConfirmModal';
 interface PlanViewProps {
   onBack: () => void;
   onCreateReportFromPoint?: (plan: ApiPlan, point: ApiPlanPoint) => void;
+  onStartReportFromPlan?: (plan: ApiPlan) => void;
+  initialPlanId?: string | null;
+  initialPointId?: string | null;
 }
 
-type SubView = 'LIST' | 'UPLOAD' | 'VIEWER';
+type SubView = 'SITES' | 'CREATE_SITE' | 'SITE' | 'UPLOAD_PLAN' | 'VIEWER';
 
 const statusBadge: Record<string, string> = {
   a_faire: 'badge--danger',
@@ -129,11 +132,17 @@ const PinMarker: React.FC<{
   );
 };
 
-export const PlanView: React.FC<PlanViewProps> = ({ onBack, onCreateReportFromPoint }) => {
+export const PlanView: React.FC<PlanViewProps> = ({
+  onBack,
+  onCreateReportFromPoint,
+  onStartReportFromPlan,
+  initialPlanId,
+  initialPointId,
+}) => {
   const { toast } = useToast();
 
   // Sub-views
-  const [subView, setSubView] = useState<SubView>('LIST');
+  const [subView, setSubView] = useState<SubView>('SITES');
 
   // Confirm dialog (centralized: avoid native confirm() which breaks the premium feel)
   const [confirmState, setConfirmState] = useState<{
@@ -145,18 +154,26 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack, onCreateReportFromPo
     onConfirm: () => void | Promise<void>;
   } | null>(null);
 
-  // List
-  const [plans, setPlans] = useState<ApiPlanListItem[]>([]);
-  const [loadingPlans, setLoadingPlans] = useState(true);
+  // Sites list
+  const [sites, setSites] = useState<ApiSiteListItem[]>([]);
+  const [loadingSites, setLoadingSites] = useState(true);
+
+  // Current site + its plans
+  const [currentSite, setCurrentSite] = useState<ApiSite | null>(null);
+  const [sitePlans, setSitePlans] = useState<ApiPlanListItem[]>([]);
+  const [loadingSite, setLoadingSite] = useState(false);
 
   // Current plan
   const [currentPlan, setCurrentPlan] = useState<ApiPlan | null>(null);
   const [loadingPlan, setLoadingPlan] = useState(false);
 
-  // Upload
-  const [uploadSiteName, setUploadSiteName] = useState('');
-  const [uploadAddress, setUploadAddress] = useState('');
-  const [uploadImageDataUrl, setUploadImageDataUrl] = useState('');
+  // Create site
+  const [siteNameInput, setSiteNameInput] = useState('');
+  const [siteAddressInput, setSiteAddressInput] = useState('');
+
+  // Upload plan (inside a site)
+  const [planNameInput, setPlanNameInput] = useState('Plan principal');
+  const [planImageDataUrl, setPlanImageDataUrl] = useState('');
   const [uploading, setUploading] = useState(false);
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -185,43 +202,154 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack, onCreateReportFromPo
   // PDF
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
-  // Load plans on mount
-  useEffect(() => {
-    loadPlans();
-  }, []);
-
-  const loadPlans = async () => {
-    setLoadingPlans(true);
+  const loadSites = useCallback(async () => {
+    setLoadingSites(true);
     try {
-      const data = await plansApi.getAll();
-      setPlans(data);
+      const data = await sitesApi.getAll();
+      setSites(data);
     } catch (err) {
-      console.error('Error loading plans:', err);
+      console.error('Error loading sites:', err);
+      toast.error('Erreur lors du chargement des chantiers.');
     } finally {
-      setLoadingPlans(false);
+      setLoadingSites(false);
+    }
+  }, [toast]);
+
+  // Load sites on mount
+  useEffect(() => {
+    loadSites();
+  }, [loadSites]);
+
+  const openSite = async (siteId: string) => {
+    setLoadingSite(true);
+    try {
+      const site = await sitesApi.getById(siteId);
+      setCurrentSite(site);
+      setSitePlans(site.plans || []);
+      setCurrentPlan(null);
+      setSubView('SITE');
+    } catch (err) {
+      console.error('Error loading site:', err);
+      toast.error('Erreur lors du chargement du chantier.');
+    } finally {
+      setLoadingSite(false);
     }
   };
 
-  const openPlan = async (planId: string) => {
-    setLoadingPlan(true);
-    try {
-      const plan = await plansApi.getById(planId);
-      setCurrentPlan(plan);
-      setSubView('VIEWER');
-      setZoom(1);
-      setViewerTab('PLAN');
-      setActionQuery('');
-      setActionCategory('all');
-      setPanelMode('closed');
-      setSelectedPoint(null);
+  const refreshCurrentSitePlans = useCallback(
+    async (siteId?: string) => {
+      const id = siteId || currentSite?.id;
+      if (!id) return;
+      try {
+        const plans = await plansApi.getAll({ siteId: id });
+        setSitePlans(plans);
+      } catch (err) {
+        console.error('Error loading site plans:', err);
+      }
+    },
+    [currentSite?.id]
+  );
+
+  const focusPointAfterOpenRef = useRef<string | null>(null);
+  const appliedInitialRef = useRef(false);
+
+  const openPlan = useCallback(
+    async (planId: string, opts?: { focusPointId?: string | null; fromResume?: boolean }) => {
+      focusPointAfterOpenRef.current = opts?.focusPointId || null;
+      setLoadingPlan(true);
+      try {
+        const plan = await plansApi.getById(planId);
+        setCurrentPlan(plan);
+        // Ensure we have the site context (for breadcrumbs/back)
+        if (!currentSite || currentSite.id !== plan.siteId) {
+          try {
+            const site = await sitesApi.getById(plan.siteId);
+            setCurrentSite(site);
+            setSitePlans(site.plans || []);
+          } catch {
+            // Fallback: minimal site context from the plan payload.
+            setCurrentSite({
+              id: plan.siteId,
+              siteName: plan.siteName,
+              address: plan.address,
+              createdAt: plan.createdAt,
+              updatedAt: plan.updatedAt,
+            });
+            // If we're resuming, we can skip the plans list refresh (it will be loaded on demand).
+            if (!opts?.fromResume) {
+              await refreshCurrentSitePlans(plan.siteId);
+            }
+          }
+        }
+
+        setSubView('VIEWER');
+        setZoom(1);
+        setViewerTab('PLAN');
+        setActionQuery('');
+        setActionCategory('all');
+        setPanelMode('closed');
+        setSelectedPoint(null);
+        setEditingPoint(null);
+        setClickPosition(null);
+      } catch (err) {
+        console.error('Error loading plan:', err);
+        toast.error('Erreur lors du chargement du plan.');
+      } finally {
+        setLoadingPlan(false);
+      }
+    },
+    [currentSite, refreshCurrentSitePlans, toast]
+  );
+
+  // Resume: open a specific plan (and point) when returning from another flow (PDF/report)
+  useEffect(() => {
+    if (appliedInitialRef.current) return;
+    if (!initialPlanId) return;
+    appliedInitialRef.current = true;
+    openPlan(initialPlanId, { focusPointId: initialPointId || null, fromResume: true });
+  }, [initialPlanId, initialPointId, openPlan]);
+
+  useEffect(() => {
+    if (subView !== 'VIEWER') return;
+    if (!currentPlan) return;
+    const focusId = focusPointAfterOpenRef.current;
+    if (!focusId) return;
+
+    const pt = currentPlan.points.find((p) => p.id === focusId);
+    if (pt) {
+      setSelectedPoint(pt);
       setEditingPoint(null);
-      setClickPosition(null);
-    } catch (err) {
-      console.error('Error loading plan:', err);
-      toast.error('Erreur lors du chargement du plan.');
-    } finally {
-      setLoadingPlan(false);
+      setPanelMode('detail');
+      setViewerTab('PLAN');
     }
+    focusPointAfterOpenRef.current = null;
+  }, [currentPlan, subView]);
+
+  const handleDeleteSite = async (siteId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setConfirmState({
+      title: 'Supprimer ce chantier ?',
+      message: 'Supprimer ce chantier, tous ses plans et tous ses points. Cette action est irréversible.',
+      confirmLabel: 'Supprimer',
+      cancelLabel: 'Annuler',
+      isDestructive: true,
+      onConfirm: async () => {
+        try {
+          await sitesApi.deleteSite(siteId);
+          setSites((prev) => prev.filter((s) => s.id !== siteId));
+          if (currentSite?.id === siteId) {
+            setCurrentSite(null);
+            setSitePlans([]);
+            setCurrentPlan(null);
+            setSubView('SITES');
+          }
+          toast.success('Chantier supprimé.');
+        } catch (err) {
+          console.error('Error deleting site:', err);
+          toast.error('Erreur lors de la suppression du chantier.');
+        }
+      },
+    });
   };
 
   const handleDeletePlan = async (planId: string, e: React.MouseEvent) => {
@@ -235,7 +363,12 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack, onCreateReportFromPo
       onConfirm: async () => {
         try {
           await plansApi.deletePlan(planId);
-          setPlans((prev) => prev.filter((p) => p.id !== planId));
+          setSitePlans((prev) => prev.filter((p) => p.id !== planId));
+          if (currentPlan?.id === planId) {
+            setCurrentPlan(null);
+            setSubView('SITE');
+          }
+          await loadSites();
           toast.success('Plan supprimé.');
         } catch (err) {
           console.error('Error deleting plan:', err);
@@ -248,7 +381,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack, onCreateReportFromPo
   // Upload handlers
   const handleUploadFile = async (file: File) => {
     const dataUrl = await fileToDataUrl(file);
-    setUploadImageDataUrl(dataUrl);
+    setPlanImageDataUrl(dataUrl);
   };
 
   const handleUploadDrop = (e: React.DragEvent) => {
@@ -259,14 +392,39 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack, onCreateReportFromPo
     }
   };
 
-  const handleUploadSubmit = async () => {
-    if (!uploadSiteName.trim() || !uploadImageDataUrl) return;
+  const handleCreateSiteSubmit = async () => {
+    if (!siteNameInput.trim()) return;
+    setUploading(true);
+    try {
+      const site = await sitesApi.create({
+        siteName: siteNameInput.trim(),
+        address: siteAddressInput.trim() || undefined,
+      });
+      setCurrentSite(site);
+      setSitePlans([]);
+      setCurrentPlan(null);
+      setSubView('SITE');
+      setSiteNameInput('');
+      setSiteAddressInput('');
+      await loadSites();
+      toast.success('Chantier créé.');
+    } catch (err) {
+      console.error('Error creating site:', err);
+      toast.error('Erreur lors de la création du chantier.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleUploadPlanSubmit = async () => {
+    if (!currentSite) return;
+    if (!planNameInput.trim() || !planImageDataUrl) return;
     setUploading(true);
     try {
       const plan = await plansApi.create({
-        siteName: uploadSiteName.trim(),
-        address: uploadAddress.trim() || undefined,
-        imageDataUrl: uploadImageDataUrl,
+        siteId: currentSite.id,
+        planName: planNameInput.trim(),
+        imageDataUrl: planImageDataUrl,
       });
       setCurrentPlan(plan);
       setSubView('VIEWER');
@@ -279,9 +437,10 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack, onCreateReportFromPo
       setEditingPoint(null);
       setClickPosition(null);
       // Reset upload form
-      setUploadSiteName('');
-      setUploadAddress('');
-      setUploadImageDataUrl('');
+      setPlanNameInput('Plan principal');
+      setPlanImageDataUrl('');
+      await refreshCurrentSitePlans(currentSite.id);
+      await loadSites();
       toast.success('Plan créé.');
     } catch (err) {
       console.error('Error creating plan:', err);
@@ -516,197 +675,124 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack, onCreateReportFromPo
     }
   };
 
-  // Back navigation
-  const handleBackFromViewer = () => {
-    setCurrentPlan(null);
-    setSubView('LIST');
-    loadPlans();
-  };
+    // Back navigation
+    const handleBackToSites = () => {
+      setCurrentPlan(null);
+      setCurrentSite(null);
+      setSitePlans([]);
+      setSubView('SITES');
+      loadSites();
+    };
 
-  // === RENDER ===
+    const handleBackToSite = () => {
+      setCurrentPlan(null);
+      setPanelMode('closed');
+      setSelectedPoint(null);
+      setEditingPoint(null);
+      setClickPosition(null);
+      setSubView('SITE');
+      refreshCurrentSitePlans();
+      loadSites();
+    };
 
-  // LIST view
-  if (subView === 'LIST') {
-    return (
-      <>
-        <div className="view">
-          <div className="view__top">
-            <button onClick={onBack} className="link-btn">
-              <ArrowLeft size={16} /> Accueil
-            </button>
-          </div>
+    const handleOpenCreateSite = () => {
+      setSiteNameInput('');
+      setSiteAddressInput('');
+      setSubView('CREATE_SITE');
+    };
 
-          <div className="card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <div>
-                <h2 style={{ fontSize: '1.3rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Map size={22} /> Plans & Points
-                </h2>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '4px' }}>
-                  {plans.length} plan(s) enregistre(s)
-                </p>
-              </div>
-              <button className="btn btn--primary" onClick={() => setSubView('UPLOAD')}>
-                <Plus size={16} /> Nouveau plan
+    const handleOpenUploadPlan = () => {
+      if (!currentSite) return;
+      setPlanNameInput('Plan principal');
+      setPlanImageDataUrl('');
+      setSubView('UPLOAD_PLAN');
+    };
+
+    // === RENDER ===
+
+    // SITES view
+    if (subView === 'SITES') {
+      return (
+        <>
+          <div className="view">
+            <div className="view__top">
+              <button onClick={onBack} className="link-btn">
+                <ArrowLeft size={16} /> Accueil
               </button>
             </div>
 
-            {loadingPlans ? (
-              <div style={{ textAlign: 'center', padding: '40px 0' }}>
-                <Loader2 size={24} className="spin" />
-                <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>Chargement...</p>
-              </div>
-            ) : plans.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>
-                <Map size={40} style={{ opacity: 0.3, marginBottom: '12px' }} />
-                <p>Aucun plan pour le moment.</p>
-                <p style={{ fontSize: '0.85rem' }}>Cliquez sur "Nouveau plan" pour commencer.</p>
-              </div>
-            ) : (
-              <div className="plan-list">
-                {plans.map((plan) => (
-                  <div key={plan.id} className="plan-card" onClick={() => openPlan(plan.id)}>
-                    <div className="plan-card__info">
-                      <span className="plan-card__name">{plan.siteName}</span>
-                      <span className="plan-card__meta">
-                        {plan.address && `${plan.address} · `}
-                        {new Date(plan.createdAt).toLocaleDateString('fr-FR')}
-                      </span>
-                    </div>
-                    <div className="plan-card__badge">
-                      <span className="badge badge--info">{plan.pointsCount} point(s)</span>
-                      <button
-                        className="btn btn--ghost"
-                        onClick={(e) => handleDeletePlan(plan.id, e)}
-                        style={{ color: 'var(--danger)', padding: '4px' }}
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {loadingPlan && (
-            <div className="modal-overlay">
-              <div style={{ textAlign: 'center', color: 'white' }}>
-                <Loader2 size={32} className="spin" />
-                <p style={{ marginTop: '12px' }}>Chargement du plan...</p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <ConfirmModal
-          isOpen={!!confirmState}
-          onClose={() => setConfirmState(null)}
-          onConfirm={async () => confirmState?.onConfirm()}
-          title={confirmState?.title ?? ''}
-          message={confirmState?.message ?? ''}
-          confirmLabel={confirmState?.confirmLabel}
-          cancelLabel={confirmState?.cancelLabel}
-          isDestructive={confirmState?.isDestructive}
-        />
-      </>
-    );
-  }
-
-  // UPLOAD view
-  if (subView === 'UPLOAD') {
-    return (
-      <>
-        <div className="view">
-          <div className="view__top">
-            <button onClick={() => setSubView('LIST')} className="link-btn">
-              <ArrowLeft size={16} /> Retour
-            </button>
-          </div>
-
-        <div className="card">
-          <h2 style={{ fontSize: '1.3rem', fontWeight: 800, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Plus size={20} /> Nouveau plan
-          </h2>
-
-          <div className="plan-upload">
-            {/* Plan image */}
-            <div className="form-field">
-              <label>Image du plan *</label>
-              <input
-                type="file"
-                accept="image/*"
-                ref={uploadInputRef}
-                onChange={async (e) => {
-                  if (e.target.files && e.target.files[0]) {
-                    await handleUploadFile(e.target.files[0]);
-                  }
-                }}
-                className="hidden"
-              />
-              {uploadImageDataUrl ? (
+            <div className="card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                 <div>
-                  <div className="plan-upload__preview">
-                    <img src={uploadImageDataUrl} alt="Preview" />
-                  </div>
-                  <button
-                    className="btn btn--ghost"
-                    onClick={() => uploadInputRef.current?.click()}
-                    style={{ marginTop: '8px', width: '100%' }}
-                  >
-                    <Camera size={16} /> Changer l'image
-                  </button>
+                  <h2 style={{ fontSize: '1.3rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Building2 size={22} /> Chantiers
+                  </h2>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '4px' }}>
+                    Organisez vos plans et vos points par chantier.
+                  </p>
+                </div>
+                <button className="btn btn--primary" onClick={handleOpenCreateSite}>
+                  <Plus size={16} /> Nouveau chantier
+                </button>
+              </div>
+
+              {loadingSites ? (
+                <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                  <Loader2 size={24} className="spin" />
+                  <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>Chargement...</p>
+                </div>
+              ) : sites.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>
+                  <Building2 size={40} style={{ opacity: 0.3, marginBottom: '12px' }} />
+                  <p>Aucun chantier pour le moment.</p>
+                  <p style={{ fontSize: '0.85rem' }}>Cliquez sur "Nouveau chantier" pour commencer.</p>
                 </div>
               ) : (
-                <div
-                  className={`dropzone ${isDragging ? 'dropzone--active' : ''}`}
-                  onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                  onDragLeave={() => setIsDragging(false)}
-                  onDrop={handleUploadDrop}
-                  onClick={() => uploadInputRef.current?.click()}
-                >
-                  <div className="dropzone__icon"><Upload size={28} /></div>
-                  <p className="dropzone__title">Deposez le plan ou cliquez pour importer</p>
-                  <p className="dropzone__hint">Formats JPG, PNG</p>
+                <div className="plan-list">
+                  {sites.map((site) => (
+                    <div key={site.id} className="plan-card" onClick={() => openSite(site.id)}>
+                      <div className="plan-card__info">
+                        <span className="plan-card__name">{site.siteName}</span>
+                        <span className="plan-card__meta">
+                          {site.address ? `${site.address} · ` : ''}
+                          {site.plansCount} plan(s) · {site.pointsCount} point(s)
+                        </span>
+                      </div>
+                      <div className="plan-card__badge">
+                        <span className="badge badge--info">{site.plansCount} plan(s)</span>
+                        <span className="badge badge--info">{site.pointsCount} point(s)</span>
+                        <button
+                          className="btn btn--ghost"
+                          onClick={(e) => handleDeleteSite(site.id, e)}
+                          style={{ color: 'var(--danger)', padding: '4px' }}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
 
-            {/* Site name */}
-            <div className="form-field">
-              <label>Nom du chantier *</label>
-              <input
-                type="text"
-                className="input"
-                value={uploadSiteName}
-                onChange={(e) => setUploadSiteName(e.target.value)}
-                placeholder="Ex: Residence Les Cerisiers"
-              />
-            </div>
+            {loadingSite && (
+              <div className="modal-overlay">
+                <div style={{ textAlign: 'center', color: 'white' }}>
+                  <Loader2 size={32} className="spin" />
+                  <p style={{ marginTop: '12px' }}>Chargement du chantier...</p>
+                </div>
+              </div>
+            )}
 
-            {/* Address */}
-            <div className="form-field">
-              <label>Adresse</label>
-              <input
-                type="text"
-                className="input"
-                value={uploadAddress}
-                onChange={(e) => setUploadAddress(e.target.value)}
-                placeholder="Ex: 12 rue des Lilas, 75001 Paris"
-              />
-            </div>
-
-            <button
-              className="btn btn--primary"
-              onClick={handleUploadSubmit}
-              disabled={!uploadSiteName.trim() || !uploadImageDataUrl || uploading}
-              style={{ width: '100%' }}
-            >
-              {uploading ? <><Loader2 size={16} className="spin" /> Creation...</> : 'Creer le plan'}
-            </button>
+            {loadingPlan && (
+              <div className="modal-overlay">
+                <div style={{ textAlign: 'center', color: 'white' }}>
+                  <Loader2 size={32} className="spin" />
+                  <p style={{ marginTop: '12px' }}>Chargement du plan...</p>
+                </div>
+              </div>
+            )}
           </div>
-        </div>
-        </div>
 
         <ConfirmModal
           isOpen={!!confirmState}
@@ -719,13 +805,326 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack, onCreateReportFromPo
           isDestructive={confirmState?.isDestructive}
         />
       </>
-    );
-  }
+      );
+    }
 
-  // VIEWER view
-  if (subView === 'VIEWER' && currentPlan) {
-    const isPanelOpen = panelMode !== 'closed';
-    const allPointsSorted = [...currentPlan.points].sort((a, b) => a.pointNumber - b.pointNumber);
+    // CREATE_SITE view
+    if (subView === 'CREATE_SITE') {
+      return (
+        <>
+          <div className="view">
+            <div className="view__top">
+              <button onClick={() => setSubView('SITES')} className="link-btn">
+                <ArrowLeft size={16} /> Chantiers
+              </button>
+            </div>
+
+          <div className="card">
+            <h2 style={{ fontSize: '1.3rem', fontWeight: 800, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Plus size={20} /> Nouveau chantier
+            </h2>
+
+            <div className="plan-upload">
+              <div className="form-field">
+                <label>Nom du chantier *</label>
+                <input
+                  type="text"
+                  className="input"
+                  value={siteNameInput}
+                  onChange={(e) => setSiteNameInput(e.target.value)}
+                  placeholder="Ex: Residence Les Cerisiers"
+                />
+              </div>
+
+              <div className="form-field">
+                <label>Adresse</label>
+                <input
+                  type="text"
+                  className="input"
+                  value={siteAddressInput}
+                  onChange={(e) => setSiteAddressInput(e.target.value)}
+                  placeholder="Ex: 12 rue des Lilas, 75001 Paris"
+                />
+              </div>
+
+              <button
+                className="btn btn--primary"
+                onClick={handleCreateSiteSubmit}
+                disabled={!siteNameInput.trim() || uploading}
+                style={{ width: '100%' }}
+              >
+                {uploading ? <><Loader2 size={16} className="spin" /> Creation...</> : 'Creer le chantier'}
+              </button>
+            </div>
+          </div>
+          </div>
+
+        <ConfirmModal
+          isOpen={!!confirmState}
+          onClose={() => setConfirmState(null)}
+          onConfirm={async () => confirmState?.onConfirm()}
+          title={confirmState?.title ?? ''}
+          message={confirmState?.message ?? ''}
+          confirmLabel={confirmState?.confirmLabel}
+          cancelLabel={confirmState?.cancelLabel}
+          isDestructive={confirmState?.isDestructive}
+        />
+      </>
+      );
+    }
+
+    // SITE view
+    if (subView === 'SITE') {
+      if (!currentSite) {
+        return (
+          <>
+            <div className="view">
+              <div className="view__top">
+                <button onClick={handleBackToSites} className="link-btn">
+                  <ArrowLeft size={16} /> Chantiers
+                </button>
+              </div>
+              <div className="card" style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>
+                <Building2 size={40} style={{ opacity: 0.3, marginBottom: '12px' }} />
+                <p>Chantier introuvable.</p>
+              </div>
+            </div>
+            <ConfirmModal
+              isOpen={!!confirmState}
+              onClose={() => setConfirmState(null)}
+              onConfirm={async () => confirmState?.onConfirm()}
+              title={confirmState?.title ?? ''}
+              message={confirmState?.message ?? ''}
+              confirmLabel={confirmState?.confirmLabel}
+              cancelLabel={confirmState?.cancelLabel}
+              isDestructive={confirmState?.isDestructive}
+            />
+          </>
+        );
+      }
+
+      return (
+        <>
+          <div className="view">
+            <div className="view__top">
+              <button onClick={handleBackToSites} className="link-btn">
+                <ArrowLeft size={16} /> Chantiers
+              </button>
+            </div>
+
+            <div className="card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                <div>
+                  <h2 style={{ fontSize: '1.2rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Building2 size={20} /> {currentSite.siteName}
+                  </h2>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '4px' }}>
+                    {currentSite.address || 'Adresse non renseignée'}
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <button
+                    className="btn btn--ghost"
+                    onClick={(e) => handleDeleteSite(currentSite.id, e)}
+                    style={{ color: 'var(--danger)' }}
+                    title="Supprimer le chantier"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                  <button className="btn btn--primary" onClick={handleOpenUploadPlan}>
+                    <Plus size={16} /> Ajouter un plan
+                  </button>
+                </div>
+              </div>
+
+              {loadingSite ? (
+                <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                  <Loader2 size={24} className="spin" />
+                  <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>Chargement...</p>
+                </div>
+              ) : sitePlans.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>
+                  <Layers size={40} style={{ opacity: 0.3, marginBottom: '12px' }} />
+                  <p>Aucun plan pour ce chantier.</p>
+                  <p style={{ fontSize: '0.85rem' }}>Cliquez sur "Ajouter un plan" pour commencer.</p>
+                </div>
+              ) : (
+                <div className="plan-list">
+                  {sitePlans.map((plan) => (
+                    <div key={plan.id} className="plan-card" onClick={() => openPlan(plan.id)}>
+                      <div className="plan-card__info">
+                        <span className="plan-card__name">{plan.planName}</span>
+                        <span className="plan-card__meta">
+                          {plan.pointsCount} point(s) · {new Date(plan.createdAt).toLocaleDateString('fr-FR')}
+                        </span>
+                      </div>
+                      <div className="plan-card__badge">
+                        <span className="badge badge--info">{plan.pointsCount} point(s)</span>
+                        <button
+                          className="btn btn--ghost"
+                          onClick={(e) => handleDeletePlan(plan.id, e)}
+                          style={{ color: 'var(--danger)', padding: '4px' }}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {loadingPlan && (
+              <div className="modal-overlay">
+                <div style={{ textAlign: 'center', color: 'white' }}>
+                  <Loader2 size={32} className="spin" />
+                  <p style={{ marginTop: '12px' }}>Chargement du plan...</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <ConfirmModal
+            isOpen={!!confirmState}
+            onClose={() => setConfirmState(null)}
+            onConfirm={async () => confirmState?.onConfirm()}
+            title={confirmState?.title ?? ''}
+            message={confirmState?.message ?? ''}
+            confirmLabel={confirmState?.confirmLabel}
+            cancelLabel={confirmState?.cancelLabel}
+            isDestructive={confirmState?.isDestructive}
+          />
+        </>
+      );
+    }
+
+    // UPLOAD_PLAN view
+    if (subView === 'UPLOAD_PLAN') {
+      if (!currentSite) {
+        return (
+          <>
+            <div className="view">
+              <div className="view__top">
+                <button onClick={handleBackToSites} className="link-btn">
+                  <ArrowLeft size={16} /> Chantiers
+                </button>
+              </div>
+              <div className="card" style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>
+                <Layers size={40} style={{ opacity: 0.3, marginBottom: '12px' }} />
+                <p>Veuillez d'abord sélectionner un chantier.</p>
+              </div>
+            </div>
+            <ConfirmModal
+              isOpen={!!confirmState}
+              onClose={() => setConfirmState(null)}
+              onConfirm={async () => confirmState?.onConfirm()}
+              title={confirmState?.title ?? ''}
+              message={confirmState?.message ?? ''}
+              confirmLabel={confirmState?.confirmLabel}
+              cancelLabel={confirmState?.cancelLabel}
+              isDestructive={confirmState?.isDestructive}
+            />
+          </>
+        );
+      }
+
+      return (
+        <>
+          <div className="view">
+            <div className="view__top">
+              <button onClick={() => setSubView('SITE')} className="link-btn">
+                <ArrowLeft size={16} /> Retour chantier
+              </button>
+            </div>
+
+            <div className="card">
+              <h2 style={{ fontSize: '1.3rem', fontWeight: 800, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <FilePlus size={20} /> Ajouter un plan
+              </h2>
+
+              <div className="plan-upload">
+                <div className="form-field">
+                  <label>Nom du plan *</label>
+                  <input
+                    type="text"
+                    className="input"
+                    value={planNameInput}
+                    onChange={(e) => setPlanNameInput(e.target.value)}
+                    placeholder="Ex: RDC, Etage 1, Sous-sol..."
+                  />
+                </div>
+
+                <div className="form-field">
+                  <label>Image du plan *</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    ref={uploadInputRef}
+                    onChange={async (e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        await handleUploadFile(e.target.files[0]);
+                      }
+                    }}
+                    className="hidden"
+                  />
+                  {planImageDataUrl ? (
+                    <div>
+                      <div className="plan-upload__preview">
+                        <img src={planImageDataUrl} alt="Preview" />
+                      </div>
+                      <button
+                        className="btn btn--ghost"
+                        onClick={() => uploadInputRef.current?.click()}
+                        style={{ marginTop: '8px', width: '100%' }}
+                      >
+                        <Camera size={16} /> Changer l'image
+                      </button>
+                    </div>
+                  ) : (
+                    <div
+                      className={`dropzone ${isDragging ? 'dropzone--active' : ''}`}
+                      onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                      onDragLeave={() => setIsDragging(false)}
+                      onDrop={handleUploadDrop}
+                      onClick={() => uploadInputRef.current?.click()}
+                    >
+                      <div className="dropzone__icon"><Upload size={28} /></div>
+                      <p className="dropzone__title">Deposez le plan ou cliquez pour importer</p>
+                      <p className="dropzone__hint">Formats JPG, PNG</p>
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  className="btn btn--primary"
+                  onClick={handleUploadPlanSubmit}
+                  disabled={!planNameInput.trim() || !planImageDataUrl || uploading}
+                  style={{ width: '100%' }}
+                >
+                  {uploading ? <><Loader2 size={16} className="spin" /> Creation...</> : 'Creer le plan'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <ConfirmModal
+            isOpen={!!confirmState}
+            onClose={() => setConfirmState(null)}
+            onConfirm={async () => confirmState?.onConfirm()}
+            title={confirmState?.title ?? ''}
+            message={confirmState?.message ?? ''}
+            confirmLabel={confirmState?.confirmLabel}
+            cancelLabel={confirmState?.cancelLabel}
+            isDestructive={confirmState?.isDestructive}
+          />
+        </>
+      );
+    }
+
+    // VIEWER view
+    if (subView === 'VIEWER' && currentPlan) {
+      const isPanelOpen = panelMode !== 'closed';
+      const allPointsSorted = [...currentPlan.points].sort((a, b) => a.pointNumber - b.pointNumber);
 
     const filteredForAction = allPointsSorted.filter((p) => {
       const q = actionQuery.trim().toLowerCase();
@@ -749,17 +1148,26 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack, onCreateReportFromPo
 
     return (
       <>
-        <div className="view">
-        <div className="view__top">
-          <button onClick={handleBackFromViewer} className="link-btn">
-            <ArrowLeft size={16} /> Mes plans
-          </button>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <button
-              className="btn btn--primary"
-              onClick={handleGeneratePdf}
-              disabled={generatingPdf}
-            >
+          <div className="view">
+          <div className="view__top">
+            <button onClick={handleBackToSite} className="link-btn">
+              <ArrowLeft size={16} /> Retour chantier
+            </button>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              {onStartReportFromPlan && (
+                <button
+                  className="btn btn--ghost"
+                  onClick={() => onStartReportFromPlan(currentPlan)}
+                  type="button"
+                >
+                  <Camera size={16} /> Nouveau rapport
+                </button>
+              )}
+              <button
+                className="btn btn--primary"
+                onClick={handleGeneratePdf}
+                disabled={generatingPdf}
+              >
               {generatingPdf ? (
                 <><Loader2 size={16} className="spin" /> Generation...</>
               ) : (
@@ -769,19 +1177,21 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack, onCreateReportFromPo
           </div>
         </div>
 
-        <div className={`plan-viewer-layout ${isPanelOpen ? 'plan-viewer-layout--open' : ''}`}>
-          <div className="plan-viewer-layout__main">
-            <div className="card">
-              {/* Plan header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <div>
-                  <h2 style={{ fontSize: '1.2rem', fontWeight: 800 }}>{currentPlan.siteName}</h2>
-                  {currentPlan.address && (
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '2px' }}>{currentPlan.address}</p>
-                  )}
+            <div className={`plan-viewer-layout ${isPanelOpen ? 'plan-viewer-layout--open' : ''}`}>
+            <div className="plan-viewer-layout__main">
+              <div className="card">
+                {/* Plan header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <div>
+                    <h2 style={{ fontSize: '1.2rem', fontWeight: 800 }}>{currentPlan.siteName}</h2>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '2px' }}>
+                      <Layers size={14} style={{ display: 'inline', marginRight: 6, verticalAlign: '-2px', opacity: 0.9 }} />
+                      {currentPlan.planName}
+                      {currentPlan.address ? ` · ${currentPlan.address}` : ''}
+                    </p>
+                  </div>
+                  <span className="badge badge--info">{currentPlan.points.length} point(s)</span>
                 </div>
-                <span className="badge badge--info">{currentPlan.points.length} point(s)</span>
-              </div>
 
               {/* Tabs */}
               <div className="plan-tabs">

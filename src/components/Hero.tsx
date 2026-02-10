@@ -5,10 +5,9 @@ import { motion } from 'framer-motion';
 interface HeroProps {
     onStart: () => void;
     onHistory: () => void;
-    onPlans: () => void;
 }
 
-export const Hero: React.FC<HeroProps> = ({ onStart, onHistory, onPlans }) => {
+export const Hero: React.FC<HeroProps> = ({ onStart, onHistory }) => {
     const now = new Date();
     const dateLabel = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium' }).format(now);
     const timeLabel = new Intl.DateTimeFormat('fr-FR', { timeStyle: 'short' }).format(now);
@@ -69,14 +68,6 @@ export const Hero: React.FC<HeroProps> = ({ onStart, onHistory, onPlans }) => {
                             onClick={onHistory}
                         >
                             Voir l'historique
-                        </motion.button>
-                        <motion.button
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                            className="btn btn--ghost"
-                            onClick={onPlans}
-                        >
-                            Gérer les plans
                         </motion.button>
                     </motion.div>
 

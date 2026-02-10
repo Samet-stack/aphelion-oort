@@ -296,6 +296,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
             // Garder l'observation "pure".
             // Les TS + la certification ont leurs champs dédiés et sont rendus proprement dans le PDF.
             const finalDescription = description.trim();
+            const finalSiteName = siteName.trim() || selectedPlan.siteName || 'Chantier';
             
             // Préparer les données du rapport
             const reportPayload = {
@@ -307,7 +308,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
                 locationSource: reportData.locationSource,
                 description: finalDescription,
                 imageDataUrl,
-                siteName: siteName || undefined,
+                siteName: finalSiteName,
                 operatorName: operatorName || undefined,
                 clientName: clientName || undefined,
                 priority,
@@ -352,7 +353,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
                 reportTitle: branding.reportTitle,
                 productName: branding.productName,
                 logoUrl: branding.logoUrl,
-                siteName,
+                siteName: finalSiteName,
                 operatorName,
                 clientName,
                 priority,

@@ -15,24 +15,39 @@ const router = express.Router();
 router.use(authMiddleware);
 
 // Liste des plans de l'utilisateur (sans image_data_url pour la perf)
-// Optimisé: utilise une sous-requête pour compter les points (évite N+1)
+// Optimise: sans image_data_url, et avec compteurs.
 router.get('/', async (req, res) => {
   try {
     const userId = req.user.id;
+    const { siteId } = req.query;
+
+    const params = [userId];
+    let where = 'where p.user_id = ?';
+    if (siteId) {
+      where += ' and p.site_id = ?';
+      params.push(siteId);
+    }
+
     const plans = await query(
-      `SELECT 
-         p.id, p.user_id, p.site_name, p.address, p.created_at, p.updated_at,
-         (SELECT COUNT(*) FROM plan_points WHERE plan_id = p.id) as points_count
-       FROM plans p 
-       WHERE p.user_id = ?
-       ORDER BY p.created_at DESC`,
-      [userId]
+      `select
+         p.id,
+         p.user_id,
+         p.site_id,
+         p.plan_name,
+         p.created_at,
+         p.updated_at,
+         s.site_name,
+         s.address,
+         (select count(*) from plan_points where plan_id = p.id) as points_count
+       from plans p
+       join sites s on s.id = p.site_id and s.user_id = p.user_id
+       ${where}
+       order by p.created_at desc`,
+      params
     );
 
-    // Mapper points_count vers pointsCount pour camelCase
     for (const plan of plans) {
-      plan.pointsCount = Number(plan.points_count || 0);
-      delete plan.points_count;
+      plan.pointsCount = Number(plan.pointsCount || 0);
     }
 
     res.json({ success: true, data: { plans } });
@@ -52,7 +67,19 @@ router.get('/:id', async (req, res) => {
     const { id } = req.params;
 
     const plan = await get(
-      'SELECT * FROM plans WHERE id = ? AND user_id = ?',
+      `select
+         p.id,
+         p.user_id,
+         p.site_id,
+         p.plan_name,
+         p.image_data_url,
+         p.created_at,
+         p.updated_at,
+         s.site_name,
+         s.address
+       from plans p
+       join sites s on s.id = p.site_id and s.user_id = p.user_id
+       where p.id = ? and p.user_id = ?`,
       [id, userId]
     );
 
@@ -83,23 +110,73 @@ router.get('/:id', async (req, res) => {
 router.post('/', validateCreatePlan, async (req, res) => {
   try {
     const userId = req.user.id;
-    const { siteName, address, imageDataUrl } = req.body;
-
-    if (!siteName || !imageDataUrl) {
-      return res.status(400).json({
-        success: false,
-        message: 'Nom du chantier et image du plan sont requis.'
-      });
-    }
+    const { siteId, planName, siteName, address, imageDataUrl } = req.body;
 
     const id = uuidv4();
-    await run(
-      `INSERT INTO plans (id, user_id, site_name, address, image_data_url)
-       VALUES (?, ?, ?, ?, ?)`,
-      [id, userId, siteName, address || null, imageDataUrl]
+
+    // Nouveau flux: ajouter un plan dans un chantier existant
+    if (siteId) {
+      const site = await get('select id, site_name, address from sites where id = ? and user_id = ?', [
+        siteId,
+        userId,
+      ]);
+      if (!site) {
+        return res.status(404).json({ success: false, message: 'Chantier non trouvé.' });
+      }
+
+      await run(
+        `insert into plans (id, user_id, site_id, plan_name, site_name, address, image_data_url)
+         values (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          id,
+          userId,
+          siteId,
+          planName || 'Plan principal',
+          site.siteName,
+          site.address || null,
+          imageDataUrl,
+        ]
+      );
+    } else {
+      // Legacy: creer chantier + plan en une seule action
+      if (!siteName || !imageDataUrl) {
+        return res.status(400).json({
+          success: false,
+          message: 'Nom du chantier et image du plan sont requis.'
+        });
+      }
+
+      const newSiteId = uuidv4();
+      await run(
+        `insert into sites (id, user_id, site_name, address)
+         values (?, ?, ?, ?)`,
+        [newSiteId, userId, siteName, address || null]
+      );
+
+      await run(
+        `insert into plans (id, user_id, site_id, plan_name, site_name, address, image_data_url)
+         values (?, ?, ?, ?, ?, ?, ?)`,
+        [id, userId, newSiteId, planName || 'Plan principal', siteName, address || null, imageDataUrl]
+      );
+    }
+
+    const plan = await get(
+      `select
+         p.id,
+         p.user_id,
+         p.site_id,
+         p.plan_name,
+         p.image_data_url,
+         p.created_at,
+         p.updated_at,
+         s.site_name,
+         s.address
+       from plans p
+       join sites s on s.id = p.site_id and s.user_id = p.user_id
+       where p.id = ? and p.user_id = ?`,
+      [id, userId]
     );
 
-    const plan = await get('SELECT * FROM plans WHERE id = ?', [id]);
     plan.points = [];
 
     res.status(201).json({

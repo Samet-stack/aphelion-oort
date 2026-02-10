@@ -45,16 +45,36 @@ export const changePasswordSchema = z.object({
   newPassword: z.string().min(6, 'Le nouveau mot de passe doit contenir au moins 6 caractères'),
 });
 
-// Plan schemas
-export const createPlanSchema = z.object({
+// Site schemas (chantier)
+export const createSiteSchema = z.object({
   siteName: z.string().min(1, 'Nom du chantier requis').max(200),
   address: z.string().max(500).optional(),
+});
+
+export const updateSiteSchema = z.object({
+  siteName: z.string().min(1).max(200).optional(),
+  address: z.string().max(500).optional(),
+});
+
+// Plan schemas (plan dans un chantier)
+const createPlanNewSchema = z.object({
+  siteId: z.string().uuid('siteId invalide'),
+  planName: z.string().min(1, 'Nom du plan requis').max(200),
   imageDataUrl: z.string().min(1, 'Image du plan requise'),
 });
 
-export const updatePlanSchema = z.object({
-  siteName: z.string().min(1).max(200).optional(),
+const createPlanLegacySchema = z.object({
+  siteName: z.string().min(1, 'Nom du chantier requis').max(200),
   address: z.string().max(500).optional(),
+  planName: z.string().min(1).max(200).optional(),
+  imageDataUrl: z.string().min(1, 'Image du plan requise'),
+});
+
+export const createPlanSchema = z.union([createPlanNewSchema, createPlanLegacySchema]);
+
+export const updatePlanSchema = z.object({
+  planName: z.string().min(1).max(200).optional(),
+  imageDataUrl: z.string().min(1).optional(),
 });
 
 // Point schemas
@@ -72,8 +92,8 @@ export const createPointSchema = z.object({
   category: pointCategoryEnum,
   status: pointStatusEnum.default('a_faire'),
   room: z.string().max(100).optional(),
-  photoDataUrl: z.string().optional(),
-  dateLabel: z.string().max(100).optional(),
+  photoDataUrl: z.string().min(1, 'Photo requise'),
+  dateLabel: z.string().min(1, 'Date requise').max(100),
 });
 
 export const updatePointSchema = z.object({
@@ -88,24 +108,33 @@ export const updatePointSchema = z.object({
 
 // Report schemas
 export const createReportSchema = z.object({
-  title: z.string().min(1, 'Titre requis').max(200),
-  siteName: z.string().min(1, 'Nom du chantier requis').max(200),
+  reportId: z.string().min(1, 'ID rapport requis').max(80),
+  dateLabel: z.string().min(1, 'Date requise').max(120),
   address: z.string().max(500).optional(),
+  coordinates: z.string().max(200).optional(),
+  accuracy: z.number().nullable().optional(),
+  locationSource: z.enum(['gps', 'demo', 'unavailable']).default('unavailable'),
   description: z.string().max(5000).optional(),
   imageDataUrl: z.string().min(1, 'Image requise'),
+  siteName: z.string().min(1, 'Nom du chantier requis').max(200),
+  operatorName: z.string().max(200).optional(),
+  clientName: z.string().max(200).optional(),
   priority: z.enum(['low', 'medium', 'high']),
-  aiAnalysis: z.object({
-    category: z.string().optional(),
-    priority: z.enum(['low', 'medium', 'high']).optional(),
-    description: z.string().optional(),
-  }).optional(),
-  extraWork: z.array(z.object({
-    description: z.string(),
-    lot: z.string().optional(),
-    estimatedCost: z.number().optional(),
-  })).optional(),
+  category: z.enum(['safety', 'progress', 'anomaly', 'other']),
+  integrityHash: z.string().max(256).optional(),
+  clientSignature: z.string().optional(),
   planId: z.string().uuid().optional(),
   planPointId: z.string().uuid().optional(),
+  extraWorks: z
+    .array(
+      z.object({
+        description: z.string().min(1).max(1000),
+        estimatedCost: z.number().min(0).optional(),
+        urgency: z.enum(['low', 'medium', 'high']).optional(),
+        category: z.string().max(200).optional(),
+      })
+    )
+    .optional(),
 });
 
 // AI schemas
@@ -127,6 +156,8 @@ export const validateRegister = validate(registerSchema);
 export const validateLogin = validate(loginSchema);
 export const validateUpdateProfile = validate(updateProfileSchema);
 export const validateChangePassword = validate(changePasswordSchema);
+export const validateCreateSite = validate(createSiteSchema);
+export const validateUpdateSite = validate(updateSiteSchema);
 export const validateCreatePlan = validate(createPlanSchema);
 export const validateUpdatePlan = validate(updatePlanSchema);
 export const validateCreatePoint = validate(createPointSchema);

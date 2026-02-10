@@ -176,19 +176,27 @@ router.post('/', validateCreateReport, async (req, res) => {
     } = req.body;
     
     const id = uuidv4();
+
+    // Derive site_id when the report is linked to a plan.
+    // This keeps the DB consistent even if siteName is edited client-side.
+    let siteId = null;
+    if (planId) {
+      const plan = await get('select site_id from plans where id = ? and user_id = ?', [planId, userId]);
+      siteId = plan?.siteId || null;
+    }
     
     await run(
       `INSERT INTO reports (
         id, user_id, report_id, date_label, address, coordinates, accuracy,
         location_source, description, image_data_url, site_name, operator_name,
         client_name, priority, category, integrity_hash, client_signature,
-        plan_id, plan_point_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        site_id, plan_id, plan_point_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id, userId, reportId, dateLabel, address, coordinates, accuracy,
         locationSource, description, imageDataUrl, siteName, operatorName,
         clientName, priority, category, integrityHash, clientSignature,
-        planId || null, planPointId || null
+        siteId, planId || null, planPointId || null
       ]
     );
     

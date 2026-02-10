@@ -383,6 +383,27 @@ export const exportApi = {
 };
 
 // Plan types
+export interface ApiSite {
+  id: string;
+  siteName: string;
+  address?: string;
+  plansCount?: number;
+  pointsCount?: number;
+  createdAt: string;
+  updatedAt: string;
+  plans?: ApiPlanListItem[];
+}
+
+export interface ApiSiteListItem {
+  id: string;
+  siteName: string;
+  address?: string;
+  plansCount: number;
+  pointsCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ApiPlanPoint {
   id: string;
   planId: string;
@@ -402,6 +423,8 @@ export interface ApiPlanPoint {
 
 export interface ApiPlan {
   id: string;
+  siteId: string;
+  planName: string;
   siteName: string;
   address?: string;
   imageDataUrl: string;
@@ -413,6 +436,8 @@ export interface ApiPlan {
 
 export interface ApiPlanListItem {
   id: string;
+  siteId: string;
+  planName: string;
   siteName: string;
   address?: string;
   pointsCount: number;
@@ -420,10 +445,62 @@ export interface ApiPlanListItem {
   updatedAt: string;
 }
 
+// Sites API
+export const sitesApi = {
+  getAll: async (): Promise<ApiSiteListItem[]> => {
+    const response = await fetchWithAuth('/sites');
+    if (response.success && response.data) {
+      return response.data.sites;
+    }
+    return [];
+  },
+
+  getById: async (id: string): Promise<ApiSite> => {
+    const response = await fetchWithAuth(`/sites/${id}`);
+    if (response.success && response.data) {
+      return response.data.site;
+    }
+    throw new Error('Chantier non trouvé');
+  },
+
+  create: async (data: { siteName: string; address?: string }): Promise<ApiSite> => {
+    const response = await fetchWithAuth('/sites', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    if (response.success && response.data) {
+      return response.data.site;
+    }
+    throw new Error(response.message || 'Erreur lors de la création du chantier');
+  },
+
+  update: async (id: string, updates: Partial<{ siteName: string; address?: string }>): Promise<ApiSite> => {
+    const response = await fetchWithAuth(`/sites/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+    if (response.success && response.data) {
+      return response.data.site;
+    }
+    throw new Error(response.message || 'Erreur lors de la mise à jour du chantier');
+  },
+
+  deleteSite: async (id: string): Promise<void> => {
+    const response = await fetchWithAuth(`/sites/${id}`, { method: 'DELETE' });
+    if (!response.success) {
+      throw new Error(response.message || 'Erreur lors de la suppression');
+    }
+  },
+};
+
 // Plans API
 export const plansApi = {
-  getAll: async (): Promise<ApiPlanListItem[]> => {
-    const response = await fetchWithAuth('/plans');
+  getAll: async (opts?: { siteId?: string }): Promise<ApiPlanListItem[]> => {
+    const params = new URLSearchParams();
+    if (opts?.siteId) params.set('siteId', opts.siteId);
+    const qs = params.toString();
+
+    const response = await fetchWithAuth(`/plans${qs ? `?${qs}` : ''}`);
     if (response.success && response.data) {
       return response.data.plans;
     }
@@ -438,7 +515,7 @@ export const plansApi = {
     throw new Error('Plan non trouvé');
   },
 
-  create: async (data: { siteName: string; address?: string; imageDataUrl: string }): Promise<ApiPlan> => {
+  create: async (data: { siteId: string; planName: string; imageDataUrl: string }): Promise<ApiPlan> => {
     const response = await fetchWithAuth('/plans', {
       method: 'POST',
       body: JSON.stringify(data)

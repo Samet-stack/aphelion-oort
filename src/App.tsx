@@ -9,7 +9,6 @@ import { CameraView } from './components/CameraView';
 import { ReportView } from './components/ReportView';
 import { HistoryView } from './components/HistoryView';
 import { PlanView } from './components/PlanView';
-import { PlanSelector } from './components/PlanSelector';
 import { Login } from './components/Login';
 import { Register } from './components/Register';
 import { VerifyEmail } from './components/VerifyEmail';
@@ -18,7 +17,7 @@ import { PageTransition } from './components/PageTransition';
 import { ApiPlan, ApiPlanPoint } from './services/api';
 
 
-type ViewState = 'LANDING' | 'SELECT_PLAN' | 'CAMERA' | 'REPORT' | 'HISTORY' | 'PLANS' | 'AUTH';
+type ViewState = 'LANDING' | 'PLANS' | 'CAMERA' | 'REPORT' | 'HISTORY';
 
 // Composant principal protégé par auth
 function AppContent() {
@@ -27,6 +26,8 @@ function AppContent() {
   const [capturedImage, setCapturedImage] = useState<File | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<ApiPlan | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<ApiPlanPoint | null>(null);
+  const [planViewInitialPlanId, setPlanViewInitialPlanId] = useState<string | null>(null);
+  const [planViewInitialPointId, setPlanViewInitialPointId] = useState<string | null>(null);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
 
   if (isLoading) {
@@ -58,14 +59,21 @@ function AppContent() {
     );
   }
 
-  // Flux modifié : il faut d'abord sélectionner un plan
-  const handleStart = () => setView('SELECT_PLAN');
-  const handleHistory = () => setView('HISTORY');
-  const handlePlans = () => setView('PLANS');
+  const openPlansView = (opts?: { planId?: string | null; pointId?: string | null }) => {
+    setPlanViewInitialPlanId(opts?.planId ?? null);
+    setPlanViewInitialPointId(opts?.pointId ?? null);
+    setView('PLANS');
+  };
 
-  const handleSelectPlan = (plan: ApiPlan) => {
+  // Flux : Chantier -> Plans -> Points -> PDF
+  const handleStart = () => openPlansView();
+  const handleHistory = () => setView('HISTORY');
+  const handleStartReportFromPlan = (plan: ApiPlan) => {
     setSelectedPlan(plan);
-    setSelectedPoint(null); // Reset le point quand on change de plan
+    setSelectedPoint(null);
+    setCapturedImage(null);
+    setPlanViewInitialPlanId(plan.id);
+    setPlanViewInitialPointId(null);
     setView('CAMERA');
   };
 
@@ -86,6 +94,8 @@ function AppContent() {
     setSelectedPlan(plan);
     setSelectedPoint(point);
     setCapturedImage(file);
+    setPlanViewInitialPlanId(plan.id);
+    setPlanViewInitialPointId(point.id);
     setView('REPORT');
   };
 
@@ -94,20 +104,20 @@ function AppContent() {
     setView('REPORT');
   };
 
-  const handleBackToCamera = () => {
-    setCapturedImage(null);
-    setView('CAMERA');
-  };
-
-  const handleBackToPlanSelection = () => {
-    setSelectedPlan(null);
-    setView('SELECT_PLAN');
+  const handleBackToPlan = (opts?: { focusPointId?: string | null }) => {
+    if (selectedPlan) {
+      openPlansView({ planId: selectedPlan.id, pointId: opts?.focusPointId ?? null });
+      return;
+    }
+    openPlansView();
   };
 
   const handleReset = () => {
     setCapturedImage(null);
     setSelectedPlan(null);
     setSelectedPoint(null);
+    setPlanViewInitialPlanId(null);
+    setPlanViewInitialPointId(null);
     setView('LANDING');
   };
 
@@ -118,16 +128,18 @@ function AppContent() {
       <AnimatePresence mode="wait">
         {view === 'LANDING' && (
           <PageTransition key="landing">
-            <Hero onStart={handleStart} onHistory={handleHistory} onPlans={handlePlans} />
+            <Hero onStart={handleStart} onHistory={handleHistory} />
           </PageTransition>
         )}
 
-        {view === 'SELECT_PLAN' && (
-          <PageTransition key="select-plan">
-            <PlanSelector
-              onSelectPlan={handleSelectPlan}
+        {view === 'PLANS' && (
+          <PageTransition key="plans">
+            <PlanView
               onBack={handleReset}
-              onManagePlans={handlePlans}
+              onCreateReportFromPoint={handleCreateReportFromPoint}
+              onStartReportFromPlan={handleStartReportFromPlan}
+              initialPlanId={planViewInitialPlanId}
+              initialPointId={planViewInitialPointId}
             />
           </PageTransition>
         )}
@@ -136,7 +148,7 @@ function AppContent() {
           <PageTransition key="camera">
             <CameraView
               onCapture={handleCapture}
-              onBack={handleBackToPlanSelection}
+              onBack={() => handleBackToPlan()}
               selectedPlan={selectedPlan}
             />
           </PageTransition>
@@ -148,8 +160,22 @@ function AppContent() {
               imageFile={capturedImage}
               selectedPlan={selectedPlan}
               selectedPoint={selectedPoint}
-              onBack={handleBackToCamera}
-              onReset={handleReset}
+              onBack={() => {
+                setCapturedImage(null);
+                if (selectedPoint) {
+                  handleBackToPlan({ focusPointId: selectedPoint.id });
+                  return;
+                }
+                setView('CAMERA');
+              }}
+              onReset={() => {
+                setCapturedImage(null);
+                if (selectedPoint) {
+                  handleBackToPlan({ focusPointId: selectedPoint.id });
+                  return;
+                }
+                setView('CAMERA');
+              }}
             />
           </PageTransition>
         )}
@@ -158,15 +184,6 @@ function AppContent() {
           <PageTransition key="history">
             <HistoryView
               onBack={handleReset}
-            />
-          </PageTransition>
-        )}
-
-        {view === 'PLANS' && (
-          <PageTransition key="plans">
-            <PlanView 
-              onBack={handleReset} 
-              onCreateReportFromPoint={handleCreateReportFromPoint}
             />
           </PageTransition>
         )}

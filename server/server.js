@@ -9,6 +9,7 @@ import authRoutes from './routes/auth.js';
 import reportRoutes from './routes/reports.js';
 import shareRoutes from './routes/shares.js';
 import exportRoutes from './routes/export.js';
+import siteRoutes from './routes/sites.js';
 import planRoutes from './routes/plans.js';
 import aiRoutes from './routes/ai.js';
 
@@ -56,6 +57,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/shares', shareRoutes);
 app.use('/api/export', exportRoutes);
+app.use('/api/sites', siteRoutes);
 app.use('/api/plans', planRoutes);
 app.use('/api/ai', aiRoutes);
 

@@ -48,6 +48,18 @@ const getImageFormat = (dataUrl: string): 'PNG' | 'JPEG' | null => {
   return null;
 };
 
+const drawSimpleHeader = (ctx: LayoutContext, leftText: string, rightText?: string) => {
+  const { doc, pageWidth, margin } = ctx;
+  setFill(doc, PALETTE.primary);
+  doc.rect(0, 0, pageWidth, 12, 'F');
+  setText(doc, PALETTE.white);
+  doc.setFontSize(8);
+  doc.text(leftText, margin, 8);
+  if (rightText) {
+    doc.text(rightText, pageWidth - margin, 8, { align: 'right' });
+  }
+};
+
 // ========================================
 // CANVAS: RENDU DU PLAN AVEC MARQUEURS
 // ========================================
@@ -474,12 +486,7 @@ export const generatePlanPDFPremium = async (plan: ApiPlan): Promise<{ blob: Blo
   y = ctx.margin + 4;
   
   // Header simple
-  setFill(doc, PALETTE.primary);
-  doc.rect(0, 0, ctx.pageWidth, 12, 'F');
-  setText(doc, PALETTE.white);
-  doc.setFontSize(8);
-  doc.text(`${branding.productName || 'SiteFlow Pro'} - Rapport de Plan`, ctx.margin, 8);
-  doc.text(siteName, ctx.pageWidth - ctx.margin, 8, { align: 'right' });
+  drawSimpleHeader(ctx, `${branding.productName || 'SiteFlow Pro'} - Rapport de Plan`, siteName);
   
   y += 8;
   y = drawSectionTitle(doc, ctx.margin, y, 'STATISTIQUES DÉTAILLÉES', 55);
@@ -572,21 +579,22 @@ export const generatePlanPDFPremium = async (plan: ApiPlan): Promise<{ blob: Blo
     setText(doc, PALETTE.gray);
     doc.setFontSize(12);
     doc.text('Aucun point d\'inspection.', ctx.margin, ctx.margin + 20);
-  } else {
-    const sortedPoints = [...plan.points].sort((a, b) => a.pointNumber - b.pointNumber);
-    const pointsPerPage = 2;
-    const totalPointPages = Math.ceil(sortedPoints.length / pointsPerPage);
-    
-    for (let pageIdx = 0; pageIdx < totalPointPages; pageIdx++) {
+    } else {
+      const sortedPoints = [...plan.points].sort((a, b) => a.pointNumber - b.pointNumber);
+      const annexPoints: typeof sortedPoints = [];
+      const annexSeen = new Set<string>();
+      const pointsPerPage = 2;
+      const totalPointPages = Math.ceil(sortedPoints.length / pointsPerPage);
+      
+      for (let pageIdx = 0; pageIdx < totalPointPages; pageIdx++) {
       doc.addPage();
       
       // Header
-      setFill(doc, PALETTE.primary);
-      doc.rect(0, 0, ctx.pageWidth, 12, 'F');
-      setText(doc, PALETTE.white);
-      doc.setFontSize(8);
-      doc.text(`${branding.productName || 'SiteFlow Pro'} - Détail des points`, ctx.margin, 8);
-      doc.text(`Page ${pageIdx + 1}/${totalPointPages}`, ctx.pageWidth - ctx.margin, 8, { align: 'right' });
+      drawSimpleHeader(
+        ctx,
+        `${branding.productName || 'SiteFlow Pro'} - Détail des points`,
+        `Page ${pageIdx + 1}/${totalPointPages}`
+      );
       
       y = 22;
       
@@ -652,19 +660,34 @@ export const generatePlanPDFPremium = async (plan: ApiPlan): Promise<{ blob: Blo
         
         let innerY = y + 22;
         
-        // === PHOTO (gauche) ===
-        const photoW = 80;
-        const photoH = 70;
+          // === PHOTO (gauche) ===
+          const photoW = 80;
+          const photoH = 70;
+          let shouldAnnexPhoto = false;
         
         setFill(doc, PALETTE.lighterGray);
         doc.roundedRect(ctx.margin + 4, innerY - 2, photoW + 4, photoH + 4, 3, 3, 'F');
         
-        try {
-          const format = getImageFormat(point.photoDataUrl);
-          if (format) {
-            const props = doc.getImageProperties(point.photoDataUrl);
-            const ratio = props.width / props.height;
-            const boxRatio = photoW / photoH;
+          try {
+            const format = getImageFormat(point.photoDataUrl);
+            if (format) {
+              let ratio = 1;
+              try {
+                const props = doc.getImageProperties(point.photoDataUrl);
+                ratio = props.width / props.height;
+                // Screenshots are often PNG and/or much taller. Keep a full-width annex for readability.
+                shouldAnnexPhoto = format === 'PNG' || ratio < 0.62;
+              } catch {
+                // If we cannot measure it, keep the annex page to maximize chances of readability.
+                shouldAnnexPhoto = true;
+              }
+
+              if (shouldAnnexPhoto && !annexSeen.has(point.id)) {
+                annexSeen.add(point.id);
+                annexPoints.push(point);
+              }
+
+              const boxRatio = photoW / photoH;
 
             // Draw the image as "cover" (cropped) so portrait screenshots don't become tiny.
             let dw = photoW;
@@ -695,10 +718,10 @@ export const generatePlanPDFPremium = async (plan: ApiPlan): Promise<{ blob: Blo
             } finally {
               doc.restoreGraphicsState();
             }
+            }
+          } catch {
+            // Ignore photo rendering errors; we keep PDF export working.
           }
-        } catch {
-          // Ignore photo rendering errors; we keep PDF export working.
-        }
         
         // Bordure photo
         setDraw(doc, PALETTE.lightGray);
@@ -725,8 +748,8 @@ export const generatePlanPDFPremium = async (plan: ApiPlan): Promise<{ blob: Blo
         doc.text(point.dateLabel, infoX, infoY);
         infoY += 12;
         
-        // Emplacement
-        if (point.room) {
+          // Emplacement
+          if (point.room) {
           setText(doc, PALETTE.gray);
           doc.setFontSize(7);
           doc.text('EMPLACEMENT', infoX, infoY);
@@ -734,11 +757,21 @@ export const generatePlanPDFPremium = async (plan: ApiPlan): Promise<{ blob: Blo
           setText(doc, PALETTE.dark);
           doc.setFontSize(9);
           doc.text(point.room, infoX, infoY);
-          infoY += 12;
-        }
-        
-        // === DESCRIPTION (bas) ===
-        innerY += photoH + 6;
+            infoY += 12;
+          }
+
+          if (shouldAnnexPhoto) {
+            setText(doc, PALETTE.gray);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7);
+            const maxW = ctx.pageWidth - ctx.margin - infoX;
+            const lines = doc.splitTextToSize('Photo en annexe (plein écran)', maxW);
+            doc.text(lines.slice(0, 2), infoX, infoY);
+            infoY += Math.min(lines.length, 2) * 4 + 2;
+          }
+          
+          // === DESCRIPTION (bas) ===
+          innerY += photoH + 6;
         
         if (point.description) {
           setText(doc, PALETTE.gray);
@@ -772,6 +805,107 @@ export const generatePlanPDFPremium = async (plan: ApiPlan): Promise<{ blob: Blo
           y += cardH + 8;
         }
       });
+    }
+
+      // ========================================
+      // ANNEXE PHOTOS (lisibilité)
+      // ========================================
+      // For tall portrait images (e.g. phone screenshots), the 2-per-page layout can make details unreadable.
+      // We add a lightweight annex with full-width photos, and we split very tall images into two crops.
+      if (annexPoints.length > 0) {
+        for (const point of annexPoints) {
+          doc.addPage();
+
+        drawSimpleHeader(ctx, `${branding.productName || 'SiteFlow Pro'} - Annexe photos`, siteName);
+
+        y = 22;
+        y = drawSectionTitle(doc, ctx.margin, y, `PHOTO - POINT ${point.pointNumber}`, 58);
+
+        // Title + status badge
+        const statusInfo = STATUS[point.status as keyof typeof STATUS] || STATUS.a_faire;
+        setText(doc, PALETTE.dark);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        const titleMaxW = ctx.contentWidth - 45;
+        const title = doc.splitTextToSize(point.title, titleMaxW)[0];
+        doc.text(title, ctx.margin, y);
+        drawBadge(doc, statusInfo.label, ctx.pageWidth - ctx.margin - 40, y + 3, statusInfo.color);
+        y += 10;
+
+        const format = point.photoDataUrl ? getImageFormat(point.photoDataUrl) : null;
+        if (!format) continue;
+
+        const imgX = ctx.margin;
+        const imgY = y;
+        const boxW = ctx.contentWidth;
+        const boxH = ctx.pageHeight - imgY - ctx.margin - 14; // keep space for footer
+
+        try {
+          const props = doc.getImageProperties(point.photoDataUrl);
+          const ratio = props.width / props.height;
+
+          // Scale the image to full width.
+          const scaledH = boxW / ratio;
+
+          // Border style
+          setDraw(doc, PALETTE.lightGray);
+          doc.setLineWidth(0.4);
+
+          if (scaledH <= boxH) {
+            // Fits in one shot.
+            setFill(doc, PALETTE.lighterGray);
+            doc.roundedRect(imgX, imgY, boxW, boxH, 4, 4, 'F');
+
+            doc.saveGraphicsState();
+            try {
+              doc.roundedRect(imgX, imgY, boxW, boxH, 4, 4, null);
+              doc.clip();
+              const dy = imgY + (boxH - scaledH) / 2;
+              doc.addImage(point.photoDataUrl, format, imgX, dy, boxW, scaledH);
+            } finally {
+              doc.restoreGraphicsState();
+            }
+
+            doc.roundedRect(imgX, imgY, boxW, boxH, 4, 4, 'S');
+          } else {
+            // Too tall: split into top and bottom crops.
+            const gap = 6;
+            const segH = (boxH - gap) / 2;
+            const seg1Y = imgY;
+            const seg2Y = imgY + segH + gap;
+
+            // Background panels
+            setFill(doc, PALETTE.lighterGray);
+            doc.roundedRect(imgX, seg1Y, boxW, segH, 4, 4, 'F');
+            doc.roundedRect(imgX, seg2Y, boxW, segH, 4, 4, 'F');
+
+            // Top crop
+            doc.saveGraphicsState();
+            try {
+              doc.roundedRect(imgX, seg1Y, boxW, segH, 4, 4, null);
+              doc.clip();
+              doc.addImage(point.photoDataUrl, format, imgX, seg1Y, boxW, scaledH);
+            } finally {
+              doc.restoreGraphicsState();
+            }
+            doc.roundedRect(imgX, seg1Y, boxW, segH, 4, 4, 'S');
+
+            // Bottom crop (align image bottom with segment bottom)
+            const bottomImgY = seg2Y - (scaledH - segH);
+            doc.saveGraphicsState();
+            try {
+              doc.roundedRect(imgX, seg2Y, boxW, segH, 4, 4, null);
+              doc.clip();
+              doc.addImage(point.photoDataUrl, format, imgX, bottomImgY, boxW, scaledH);
+            } finally {
+              doc.restoreGraphicsState();
+            }
+            doc.roundedRect(imgX, seg2Y, boxW, segH, 4, 4, 'S');
+          }
+        } catch {
+          // If rendering fails, keep the PDF export usable.
+        }
+      }
     }
   }
   

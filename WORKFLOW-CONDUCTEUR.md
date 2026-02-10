@@ -11,15 +11,22 @@ Ce document explique le workflow métier complet pour un conducteur de travaux u
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│ 1. CRÉER UN CHANTIER (Plan)                                     │
+│ 1. CRÉER UN CHANTIER                                             │
 │    ├─ Nom du chantier                                           │
 │    ├─ Adresse                                                   │
-│    └─ Upload du plan (image)                                    │
+│    └─ (Optionnel) infos client / opérateur                      │
 └─────────────────────────────────────────────────────────────────┘
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│ 2. AJOUTER DES POINTS SUR LE PLAN                               │
+│ 2. AJOUTER UN OU PLUSIEURS PLANS (blueprints)                   │
+│    ├─ Nom du plan (RDC, Étage 1, Sous-sol...)                   │
+│    └─ Upload de l'image du plan                                 │
+└─────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ 3. AJOUTER DES POINTS SUR LE PLAN                               │
 │    ├─ Cliquer sur le plan pour positionner                      │
 │    ├─ Prendre une photo du problème                             │
 │    ├─ Décrire le problème                                       │
@@ -29,7 +36,7 @@ Ce document explique le workflow métier complet pour un conducteur de travaux u
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│ 3. CRÉER UN RAPPORT DEPUIS UN POINT                             │
+│ 4. CRÉER UN RAPPORT DEPUIS UN POINT                             │
 │    ├─ Ouvrir un point existant                                  │
 │    ├─ Cliquer sur "Créer rapport"                               │
 │    ├─ L'IA analyse automatiquement la photo                     │
@@ -41,7 +48,7 @@ Ce document explique le workflow métier complet pour un conducteur de travaux u
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│ 4. SUIVI ET HISTORIQUE                                          │
+│ 5. SUIVI ET HISTORIQUE                                          │
 │    ├─ Voir tous les rapports liés au plan                       │
 │    ├─ Filtrer par statut (à faire/en cours/terminé)             │
 │    └─ Exporter en PDF global                                    │
@@ -52,7 +59,7 @@ Ce document explique le workflow métier complet pour un conducteur de travaux u
 
 ### Scénario 1 : Rapport depuis un point existant
 
-1. **Aller dans "Gérer les plans"**
+1. **Choisir un chantier**
 2. **Ouvrir un plan**
 3. **Cliquer sur un point** (marqueur rouge/jaune/vert)
 4. **Cliquer sur "Créer rapport"** (bouton vert)
@@ -67,7 +74,7 @@ Ce document explique le workflow métier complet pour un conducteur de travaux u
 ### Scénario 2 : Rapport rapide (sans point)
 
 1. **Cliquer "Choisir un chantier"**
-2. **Sélectionner le plan**
+2. **Ouvrir un plan**
 3. **Prendre une photo**
 4. L'IA analyse
 5. **Générer le PDF**
