@@ -53,14 +53,36 @@ const allowedOrigins = new Set(
   ].filter(Boolean)
 );
 
+const isPrivateDevOrigin = (origin) => {
+  if ((process.env.NODE_ENV || 'development') === 'production') return false;
+  return /^http:\/\/(?:localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(?::\d{2,5})?$/.test(origin);
+};
+
+const isAllowedVercelOrigin = (origin) => {
+  const allowedVercelSlug = process.env.VERCEL_SLUG;
+  if (!allowedVercelSlug) return false;
+
+  try {
+    const parsed = new URL(origin);
+    if (parsed.protocol !== 'https:') return false;
+    if (!parsed.hostname.endsWith('.vercel.app')) return false;
+    return (
+      parsed.hostname === `${allowedVercelSlug}.vercel.app` ||
+      parsed.hostname.startsWith(`${allowedVercelSlug}-`)
+    );
+  } catch {
+    return false;
+  }
+};
+
 const isAllowedOrigin = (origin) => {
   // Allow requests without Origin header (curl, health checks, server-to-server).
   // Browser CORS protection still applies for cross-origin frontends.
   if (!origin) return true;
   if (allowedOrigins.has(origin)) return true;
-  // Only allow specific Vercel deployments, not all .vercel.app
-  const allowedVercelSlug = process.env.VERCEL_SLUG;
-  if (allowedVercelSlug && origin.includes(allowedVercelSlug)) return true;
+  if (isPrivateDevOrigin(origin)) return true;
+  // Allow only explicit Vercel hostnames for this project slug.
+  if (isAllowedVercelOrigin(origin)) return true;
   return false;
 };
 
@@ -68,9 +90,12 @@ app.use(
   cors({
     origin: (origin, cb) => {
       if (isAllowedOrigin(origin)) {
-        cb(null, origin);
+        cb(null, true);
       } else {
-        cb(new Error('CORS not allowed'));
+        const err = new Error('CORS not allowed');
+        err.statusCode = 403;
+        err.code = 'CORS_NOT_ALLOWED';
+        cb(err);
       }
     },
     credentials: false,
@@ -109,6 +134,13 @@ if (process.env.NODE_ENV === 'production') {
 
 // Error handler
 app.use((err, req, res, next) => {
+  if (err?.code === 'CORS_NOT_ALLOWED') {
+    return res.status(403).json({
+      success: false,
+      message: 'Origine non autorisée.'
+    });
+  }
+
   logger.error('Unhandled server error', {
     requestId: req?.requestId,
     method: req?.method,

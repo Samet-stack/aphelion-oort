@@ -11,6 +11,7 @@ import { VoiceRecorderComponent } from './VoiceRecorder';
 import { AIAnalysisCard } from './AIAnalysisCard';
 import { AIStatusIndicator } from './AIStatusIndicator';
 import { branding } from '../config/branding';
+import { closePendingPdfTab, openPendingPdfTab, presentPdfBlob } from '../services/pdf-open';
 
 interface ReportViewProps {
     imageFile: File;
@@ -98,6 +99,18 @@ const formatReportId = (date: Date) => {
     const time = `${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
     const random = `${Math.floor(Math.random() * 1000)}`.padStart(3, '0');
     return `SF-${stamp}-${time}-${random}`;
+};
+
+const getApiStatus = (err: unknown): number | undefined => {
+    if (!err || typeof err !== 'object') return undefined;
+    if (!('status' in err)) return undefined;
+    const status = (err as { status?: unknown }).status;
+    return typeof status === 'number' ? status : undefined;
+};
+
+const shouldFallbackOffline = (err: unknown) => {
+    const status = getApiStatus(err);
+    return status === 0 || (typeof status === 'number' && status >= 500);
 };
 
 export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan, selectedPoint, onBack, onReset }) => {
@@ -282,6 +295,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
         if (!reportData || downloadState === 'loading') {
             return;
         }
+        const pendingTab = openPendingPdfTab();
         setDownloadState('loading');
         setError(null);
         setInfoMessage(null);
@@ -330,12 +344,17 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
                 await reportsApi.create(reportPayload);
                 // Succès serveur → rafraîchir la liste
                 await refreshReports();
-            } catch (err: any) {
-                // Si erreur réseau ou serveur, sauvegarder localement
-                console.log('Sauvegarde serveur échouée, mode offline activé');
-                await saveReportOffline(reportPayload); // ← Appelle déjà refreshReports()
-                // Afficher un message de succès (pas une erreur)
-                setInfoMessage('📱 Rapport sauvegardé localement. Il sera synchronisé quand le réseau reviendra.');
+            } catch (err: unknown) {
+                if (shouldFallbackOffline(err)) {
+                    // Réseau HS / serveur KO: on bascule en offline.
+                    console.log('Sauvegarde serveur échouée, mode offline activé');
+                    await saveReportOffline(reportPayload); // ← Appelle déjà refreshReports()
+                    setInfoMessage('📱 Rapport sauvegardé localement. Il sera synchronisé quand le réseau reviendra.');
+                } else {
+                    // Erreur métier (4xx): ne pas polluer la file offline avec des payloads invalides.
+                    const message = err instanceof Error ? err.message : 'Erreur de sauvegarde serveur';
+                    setInfoMessage(`PDF généré. Rapport non sauvegardé côté serveur: ${message}`);
+                }
             }
             
             // Générer le PDF
@@ -362,20 +381,10 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
                 extraWorks,
                 clientSignature,
             });
-            const blobUrl = URL.createObjectURL(blob);
-            const newTab = window.open(blobUrl, '_blank');
-            if (!newTab) {
-                // Fallback download if popup blocked
-                const a = document.createElement('a');
-                a.href = blobUrl;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-            }
-            setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+            presentPdfBlob({ blob, filename, pendingTab });
             setDownloadState('done');
         } catch (err) {
+            closePendingPdfTab(pendingTab);
             setError('Impossible de generer le PDF. Reessayez.');
             setDownloadState('idle');
         }

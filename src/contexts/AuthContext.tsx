@@ -167,7 +167,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const deleteReport = useCallback(async (id: string) => {
     // Si c'est un rapport local, le supprimer localement
     if (id.startsWith('local-')) {
-      offlineService.cancelLocalReport(id);
+      await offlineService.cancelLocalReport(id);
       await refreshReports();
       await loadStats();
       return;

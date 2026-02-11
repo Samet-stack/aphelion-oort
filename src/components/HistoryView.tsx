@@ -8,6 +8,7 @@ import { reportsApi, type ApiReport } from '../services/api';
 import { motion } from 'framer-motion';
 import { useToast } from '../contexts/ToastContext';
 import { ConfirmModal } from './ui/ConfirmModal';
+import { closePendingPdfTab, openPendingPdfTab, presentPdfBlob } from '../services/pdf-open';
 
 interface HistoryViewProps {
     onBack: () => void;
@@ -72,6 +73,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
 
     const handleDownload = async (report: ApiReport) => {
         setDownloadingId(report.id);
+        const pendingTab = openPendingPdfTab();
         try {
             const isLocal = report.id.startsWith('local-');
             const fullReport = isLocal || report.imageDataUrl
@@ -101,17 +103,11 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
                 extraWorks: fullReport.extraWorks,
                 clientSignature: fullReport.clientSignature,
             });
-            const blobUrl = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = blobUrl;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+            presentPdfBlob({ blob, filename, pendingTab });
 
             toast.success('PDF généré avec succès');
         } catch (err) {
+            closePendingPdfTab(pendingTab);
             toast.error('Erreur lors de la génération du PDF');
         } finally {
             setDownloadingId(null);

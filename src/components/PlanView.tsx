@@ -6,6 +6,7 @@ import { PlanPointPanel } from './PlanPointPanel';
 import { useToast } from '../contexts/ToastContext';
 import { ConfirmModal, PageHeader, EmptyState, LoadingState } from './ui';
 import { PinMarker } from './PinMarker';
+import { closePendingPdfTab, openPendingPdfTab, presentPdfBlob } from '../services/pdf-open';
 
 interface PlanViewProps {
   onBack: () => void;
@@ -583,23 +584,14 @@ export const PlanView: React.FC<PlanViewProps> = ({
 
   const handleDownloadPointPdf = async (point: ApiPlanPoint) => {
     if (!currentPlan) return;
+    const pendingTab = openPendingPdfTab();
     try {
       const { generatePointPDF } = await import('../services/point-pdf');
       const { blob, filename } = await generatePointPDF(currentPlan, point);
-      const blobUrl = URL.createObjectURL(blob);
-      const newTab = window.open(blobUrl, '_blank');
-      if (!newTab) {
-        // Fallback download if popup blocked
-        const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      }
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      presentPdfBlob({ blob, filename, pendingTab });
       toast.success('PDF généré.');
     } catch (err) {
+      closePendingPdfTab(pendingTab);
       console.error('Error generating point PDF:', err);
       toast.error('Erreur lors de la génération du PDF du point.');
     }
@@ -623,23 +615,14 @@ export const PlanView: React.FC<PlanViewProps> = ({
   const handleGeneratePdf = async () => {
     if (!currentPlan) return;
     setGeneratingPdf(true);
+    const pendingTab = openPendingPdfTab();
     try {
       const { generatePlanPDFPremium } = await import('../services/plan-pdf-premium');
       const { blob, filename } = await generatePlanPDFPremium(currentPlan);
-      const blobUrl = URL.createObjectURL(blob);
-      const newTab = window.open(blobUrl, '_blank');
-      if (!newTab) {
-        // Fallback download if popup blocked
-        const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      }
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      presentPdfBlob({ blob, filename, pendingTab });
       toast.success('PDF généré.');
     } catch (err) {
+      closePendingPdfTab(pendingTab);
       console.error('Error generating PDF:', err);
       toast.error('Erreur lors de la génération du PDF.');
     } finally {

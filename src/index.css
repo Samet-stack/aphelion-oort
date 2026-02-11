@@ -2823,8 +2823,44 @@ select {
 
 /* Responsive: mobile panel gets full grid */
 @media (max-width: 720px) {
+  .plan-viewer-layout,
+  .plan-viewer-layout__main,
+  .plan-action,
+  .plan-action-board,
+  .plan-action-col__list {
+    max-height: none;
+  }
+
+  .plan-viewer-layout,
+  .plan-viewer-layout__main,
+  .plan-action,
+  .plan-action-board,
+  .plan-action-col__list {
+    overflow: visible;
+  }
+
   .plan-viewer-layout--open {
     grid-template-columns: 1fr;
+  }
+
+  .plan-viewer {
+    max-height: none;
+    min-height: 220px;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y pinch-zoom;
+    cursor: default;
+  }
+
+  .plan-panel__body {
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+  }
+
+  .plan-viewer__canvas,
+  .plan-points-list__item,
+  .plan-action-card {
+    touch-action: manipulation;
   }
 }
 
