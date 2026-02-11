@@ -1,6 +1,7 @@
 export type PendingPdfTab = Window | null;
 
 const isBrowser = () => typeof window !== 'undefined';
+
 const isIOSDevice = () => {
   if (!isBrowser()) return false;
   const ua = window.navigator.userAgent || '';
@@ -9,8 +10,19 @@ const isIOSDevice = () => {
   return /iPad|iPhone|iPod/i.test(ua) || (platform === 'MacIntel' && touchPoints > 1);
 };
 
+const isMobileDevice = () => {
+  if (!isBrowser()) return false;
+  if (isIOSDevice()) return true;
+  const ua = window.navigator.userAgent || '';
+  return /Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+};
+
 export const openPendingPdfTab = (): PendingPdfTab => {
   if (!isBrowser()) return null;
+  // Mobile: don't pre-open a tab – new tabs stay in the background on
+  // mobile browsers so the user never sees the PDF. We navigate the
+  // current window instead (see presentPdfBlob).
+  if (isMobileDevice()) return null;
   try {
     const tab = window.open('', '_blank');
     if (tab && tab.document) {
@@ -104,62 +116,53 @@ export const presentPdfBlob = ({
 
   const blobUrl = URL.createObjectURL(blob);
   let opened = false;
-  const revokeDelayMs = isIOSDevice() ? 600000 : 120000;
+  const revokeDelayMs = isMobileDevice() ? 600000 : 120000;
 
-  // iOS WebKit may silently ignore blob navigation in some contexts.
-  // We first target the pre-opened tab (opened on click), then fallback.
-  if (isIOSDevice()) {
-    if (pendingTab && !pendingTab.closed) {
-      try {
-        opened = renderPdfInTab(pendingTab, blobUrl, filename);
-      } catch {
-        // ignore
-      }
+  // ---------------------------------------------------------------
+  // MOBILE (iOS + Android + others)
+  // On mobile browsers, window.open tabs stay in the background and
+  // the user never gets redirected to the PDF. Instead we navigate
+  // the current window directly. The user can tap "back" to return.
+  // ---------------------------------------------------------------
+  if (isMobileDevice()) {
+    // Close any pre-opened tab that might have slipped through.
+    closePendingPdfTab(pendingTab);
+
+    try {
+      window.location.assign(blobUrl);
+    } catch {
+      // ignore
     }
 
-    if (!opened && pendingTab && !pendingTab.closed) {
-      try {
-        pendingTab.location.href = blobUrl;
-        opened = true;
-      } catch {
-        // ignore
-      }
-    }
-
-    if (!opened) {
-      try {
-        window.location.assign(blobUrl);
-      } catch {
-        // ignore
-      }
-    }
-
-    window.setTimeout(() => {
-      if (!isBrowser()) return;
-
-      openBlobAsDataUrl(
-        blob,
-        (dataUrl) => {
-          try {
-            if (pendingTab && !pendingTab.closed) {
-              renderPdfInTab(pendingTab, dataUrl, filename);
-              return;
+    // iOS WebKit sometimes silently ignores blob URL navigation for PDFs.
+    // Fallback: convert to a data URL and try again after a short delay.
+    if (isIOSDevice()) {
+      window.setTimeout(() => {
+        if (!isBrowser()) return;
+        openBlobAsDataUrl(
+          blob,
+          (dataUrl) => {
+            try {
+              window.location.assign(dataUrl);
+            } catch {
+              triggerAnchor({ href: blobUrl, filename, forceDownload: false });
             }
-            window.location.assign(dataUrl);
-          } catch {
+          },
+          () => {
             triggerAnchor({ href: blobUrl, filename, forceDownload: false });
           }
-        },
-        () => {
-          triggerAnchor({ href: blobUrl, filename, forceDownload: false });
-        }
-      );
-    }, 450);
+        );
+      }, 450);
+    }
 
     setTimeout(() => URL.revokeObjectURL(blobUrl), revokeDelayMs);
     return;
   }
 
+  // ---------------------------------------------------------------
+  // DESKTOP
+  // Use the pre-opened tab, or open a new one, or fallback.
+  // ---------------------------------------------------------------
   if (!opened && pendingTab && !pendingTab.closed) {
     try {
       pendingTab.location.href = blobUrl;
@@ -188,7 +191,6 @@ export const presentPdfBlob = ({
 
   if (!opened) {
     try {
-      // Mobile-safe fallback: open the PDF in the current tab.
       window.location.assign(blobUrl);
       opened = true;
     } catch {
