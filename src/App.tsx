@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -14,10 +14,12 @@ import { Register } from './components/Register';
 import { VerifyEmail } from './components/VerifyEmail';
 import { RegisterSuccess } from './components/RegisterSuccess';
 import { PageTransition } from './components/PageTransition';
+import { MobilePdfView } from './components/MobilePdfView';
 import { ApiPlan, ApiPlanPoint } from './services/api';
+import { MobilePdfRequest, onMobilePdfRequested, revokePdfUrl } from './services/pdf-open';
 
 
-type ViewState = 'LANDING' | 'PLANS' | 'CAMERA' | 'REPORT' | 'HISTORY';
+type ViewState = 'LANDING' | 'PLANS' | 'CAMERA' | 'REPORT' | 'HISTORY' | 'PDF_VIEWER';
 
 // Composant principal protégé par auth
 function AppContent() {
@@ -29,6 +31,39 @@ function AppContent() {
   const [planViewInitialPlanId, setPlanViewInitialPlanId] = useState<string | null>(null);
   const [planViewInitialPointId, setPlanViewInitialPointId] = useState<string | null>(null);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [mobilePdf, setMobilePdf] = useState<MobilePdfRequest | null>(null);
+  const [pdfReturnView, setPdfReturnView] = useState<ViewState>('LANDING');
+
+  const clearMobilePdf = useCallback(() => {
+    setMobilePdf((current) => {
+      if (current?.blobUrl) {
+        revokePdfUrl(current.blobUrl);
+      }
+      return null;
+    });
+  }, []);
+
+  const closeMobilePdf = useCallback(() => {
+    clearMobilePdf();
+    setView(pdfReturnView);
+  }, [clearMobilePdf, pdfReturnView]);
+
+  useEffect(() => {
+    const unsubscribe = onMobilePdfRequested((payload) => {
+      setPdfReturnView((prevReturn) => (view === 'PDF_VIEWER' ? prevReturn : view));
+      setMobilePdf((current) => {
+        if (current?.blobUrl && current.blobUrl !== payload.blobUrl) {
+          revokePdfUrl(current.blobUrl);
+        }
+        return payload;
+      });
+      setView('PDF_VIEWER');
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [view]);
 
   if (isLoading) {
     return (
@@ -113,6 +148,7 @@ function AppContent() {
   };
 
   const handleReset = () => {
+    clearMobilePdf();
     setCapturedImage(null);
     setSelectedPlan(null);
     setSelectedPoint(null);
@@ -184,6 +220,16 @@ function AppContent() {
           <PageTransition key="history">
             <HistoryView
               onBack={handleReset}
+            />
+          </PageTransition>
+        )}
+
+        {view === 'PDF_VIEWER' && mobilePdf && (
+          <PageTransition key="pdf-viewer">
+            <MobilePdfView
+              blobUrl={mobilePdf.blobUrl}
+              filename={mobilePdf.filename}
+              onBack={closeMobilePdf}
             />
           </PageTransition>
         )}

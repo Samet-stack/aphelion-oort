@@ -2814,6 +2814,67 @@ select {
   background: rgba(255, 183, 3, 0.08);
 }
 
+/* ===== MOBILE PDF VIEWER ===== */
+.mobile-pdf-view {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: calc(100svh - var(--header-height) - 20px);
+}
+
+@media (min-width: 720px) {
+  .mobile-pdf-view {
+    min-height: calc(100vh - var(--header-height) - 28px);
+  }
+}
+
+.mobile-pdf-view__top {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--stroke);
+  border-radius: 14px;
+  background: rgba(11, 14, 17, 0.55);
+}
+
+.mobile-pdf-view__name {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mobile-pdf-view__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mobile-pdf-view__error {
+  margin: 0;
+  color: #ff6b6b;
+  font-size: 0.82rem;
+}
+
+.mobile-pdf-view__frame {
+  width: 100%;
+  flex: 1;
+  min-height: 70svh;
+  border: 1px solid var(--stroke);
+  border-radius: 14px;
+  background: #fff;
+}
+
+@media (min-width: 720px) {
+  .mobile-pdf-view__frame {
+    min-height: 75vh;
+  }
+}
+
 /* Active marker on plan */
 .plan-marker--active {
   transform: translate(-50%, -50%) scale(1.3) !important;
