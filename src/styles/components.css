@@ -1,0 +1,393 @@
+/* ==========================================================
+   COMPONENTS.CSS - Classes sémantiques pour remplacer inline styles
+   ========================================================== */
+
+/* -------- Page Header (titres de section) -------- */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.page-header__title {
+  font-size: 1.3rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.page-header__subtitle {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin-top: 4px;
+}
+
+/* Variante compacte */
+.page-header--compact {
+  margin-bottom: 16px;
+}
+
+.page-header--compact .page-header__title {
+  font-size: 1.2rem;
+}
+
+/* -------- Section Header (dans les cards) -------- */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.section-header__title {
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+.section-header__meta {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin-top: 2px;
+}
+
+/* -------- Empty State -------- */
+.empty-state {
+  text-align: center;
+  padding: 40px 0;
+  color: var(--text-muted);
+}
+
+.empty-state__icon {
+  opacity: 0.3;
+  margin-bottom: 12px;
+}
+
+.empty-state__title {
+  margin-bottom: 4px;
+}
+
+.empty-state__hint {
+  font-size: 0.85rem;
+}
+
+/* Variante compacte */
+.empty-state--compact {
+  padding: 24px 0;
+}
+
+/* -------- Loading State -------- */
+.loading-state {
+  text-align: center;
+  padding: 40px 0;
+}
+
+.loading-state--inline {
+  padding: 20px 0;
+}
+
+.loading-state__text {
+  color: var(--text-muted);
+  margin-top: 8px;
+}
+
+/* -------- Modal Loading -------- */
+.modal-loading {
+  text-align: center;
+  color: white;
+}
+
+.modal-loading__text {
+  margin-top: 12px;
+}
+
+/* -------- Card Actions -------- */
+.card-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* -------- Form Actions -------- */
+.form-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.form-actions--full {
+  width: 100%;
+}
+
+/* -------- Pin Marker Badge -------- */
+.pin-badge {
+  position: absolute;
+  top: 5px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
+
+/* -------- Status Colors (pour les backgrounds dynamiques) -------- */
+.bg-status-termine {
+  background: var(--success);
+}
+
+.bg-status-en_cours {
+  background: var(--warning);
+}
+
+.bg-status-a_faire {
+  background: var(--danger);
+}
+
+/* -------- Zoom Indicator -------- */
+.zoom-indicator {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  padding: 4px 8px;
+}
+
+/* -------- Hint Text -------- */
+.hint-text {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  margin-top: 8px;
+  text-align: center;
+}
+
+/* -------- Badge Small -------- */
+.badge-sm {
+  font-size: 0.7rem;
+}
+
+/* -------- Inline Icon -------- */
+.icon-inline {
+  display: inline;
+  margin-right: 6px;
+  vertical-align: -2px;
+  opacity: 0.9;
+}
+
+/* -------- Transform utilities -------- */
+.transform-zoom {
+  transform-origin: 0 0;
+}
+
+/* -------- Danger button override -------- */
+.btn-danger-ghost {
+  color: var(--danger);
+  padding: 4px;
+}
+
+/* -------- Plan card badge container -------- */
+.plan-card__actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* -------- Upload preview actions -------- */
+.upload-preview-actions {
+  margin-top: 8px;
+  width: 100%;
+}
+
+/* -------- Points section -------- */
+.points-section {
+  margin-top: 20px;
+}
+
+.points-section__title {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+/* -------- Action board hint -------- */
+.action-hint {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+/* -------- List header -------- */
+.list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.list-header__title {
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+.list-header__meta {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin-top: 4px;
+}
+
+/* ==========================================================
+   MODAL COMPONENTS
+   ========================================================== */
+
+/* -------- Modal Overlay -------- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 1rem;
+}
+
+/* -------- Modal Card -------- */
+.modal-card {
+  width: 100%;
+  max-width: 28rem;
+  padding: 1.5rem;
+  border-radius: 1rem;
+  background: #111827;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* -------- Modal Header -------- */
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.modal-header__left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.modal-header__icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.75rem;
+  background: rgba(255, 183, 3, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-header__title {
+  font-size: 1.125rem;
+  font-weight: bold;
+}
+
+.modal-header__subtitle {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}
+
+.modal-header__close {
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+}
+
+/* -------- Alert Messages -------- */
+.alert {
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.alert--error {
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  color: #f87171;
+}
+
+.alert--success {
+  background: rgba(34, 197, 94, 0.2);
+  border: 1px solid rgba(34, 197, 94, 0.5);
+  color: #4ade80;
+}
+
+/* -------- Form Components -------- */
+.form-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.form-label {
+  display: block;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.form-textarea {
+  padding: 0.75rem;
+  resize: none;
+  height: auto;
+}
+
+/* -------- Permission Selector -------- */
+.permission-selector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.permission-btn {
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.permission-btn--active {
+  border-color: #ffb703;
+  background: rgba(255, 183, 3, 0.1);
+}
+
+.permission-btn__label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.permission-btn__hint {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+/* -------- Modal Footer -------- */
+.modal-footer {
+  margin-top: 1rem;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  text-align: center;
+}

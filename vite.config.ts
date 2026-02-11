@@ -1,9 +1,26 @@
+/// <reference types="vitest" />
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vitejs.dev/config/
 export default defineConfig({
+    test: {
+        globals: true,
+        environment: 'jsdom',
+        setupFiles: ['./src/test/setup.ts'],
+        include: ['src/**/*.{test,spec}.{js,mjs,ts,tsx}'],
+        coverage: {
+            reporter: ['text', 'json', 'html'],
+            exclude: [
+                'node_modules/',
+                'src/test/',
+                '**/*.d.ts',
+                '**/*.config.{js,ts}',
+                '**/types.ts',
+            ],
+        },
+    },
     server: {
         // Needed to access the dev server from a phone on the same Wi‑Fi (e.g. iPhone Safari).
         host: true,

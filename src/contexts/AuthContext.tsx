@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { authApi, reportsApi, User, ApiReport } from '../services/api';
 import { offlineService, type OfflineState } from '../services/offline';
 
@@ -203,26 +203,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return result;
   }, [refreshReports, loadStats]);
 
+  // Memoize context value to prevent unnecessary re-renders
+  const value = useMemo(() => ({
+    user,
+    isAuthenticated: !!user,
+    isLoading,
+    reports,
+    login,
+    register,
+    logout,
+    refreshUser,
+    refreshReports,
+    deleteReport,
+    stats,
+    offlineState,
+    saveReportOffline,
+    forceSync,
+    cancelLocalReport
+  }), [user, isLoading, reports, stats, offlineState, login, register, logout, refreshUser, refreshReports, deleteReport, saveReportOffline, forceSync, cancelLocalReport]);
+
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isAuthenticated: !!user,
-        isLoading,
-        reports,
-        login,
-        register,
-        logout,
-        refreshUser,
-        refreshReports,
-        deleteReport,
-        stats,
-        offlineState,
-        saveReportOffline,
-        forceSync,
-        cancelLocalReport
-      }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,0 +1,40 @@
+## next...origin/next
+ M package-lock.json
+ M package.json
+ M server/database.js
+ M server/middleware/auth.js
+ M server/package-lock.json
+ M server/package.json
+ M server/routes/ai.js
+ M server/routes/auth.js
+ M server/routes/export.js
+ M server/server.js
+ M src/components/CameraView.tsx
+ M src/components/ExtraWork.tsx
+ M src/components/HistoryView.tsx
+ M src/components/PlanPointDetail.tsx
+ M src/components/PlanPointForm.tsx
+ M src/components/PlanPointPanel.tsx
+ M src/components/PlanSelector.tsx
+ M src/components/PlanView.tsx
+ M src/components/ReportView.tsx
+ M src/components/ShareReport.tsx
+ M src/components/ShareReportModal.tsx
+ M src/contexts/AuthContext.tsx
+ M src/main.tsx
+ M vite.config.ts
+?? ACTIONS_IMMEDIATES.md
+?? DEPLOY_CHECKLIST.md
+?? ROADMAP.md
+?? recovery/
+?? server/tests/
+?? server/vitest.config.js
+?? src/components/PinMarker.tsx
+?? src/components/ui/EmptyState.tsx
+?? src/components/ui/LoadingState.tsx
+?? src/components/ui/PageHeader.tsx
+?? src/components/ui/Stack.tsx
+?? src/components/ui/__tests__/
+?? src/components/ui/index.ts
+?? src/styles/
+?? src/test/

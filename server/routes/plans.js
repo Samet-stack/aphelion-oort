@@ -1,7 +1,9 @@
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { query, get, run } from '../database.js';
+import { query, get, run, withTransaction } from '../database.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { CACHE_TTLS, cacheKeys, getOrSetCache, invalidateUserCache } from '../services/cache.js';
+import { logRouteError } from '../services/logger.js';
 import { 
   validateCreatePlan, 
   validateUpdatePlan, 
@@ -10,6 +12,7 @@ import {
 } from '../middleware/validation.js';
 
 const router = express.Router();
+const createHttpError = (statusCode, message) => Object.assign(new Error(message), { statusCode });
 
 // Toutes les routes sont protégées
 router.use(authMiddleware);
@@ -20,39 +23,48 @@ router.get('/', async (req, res) => {
   try {
     const userId = req.user.id;
     const { siteId } = req.query;
+    const key = cacheKeys.plansList({ userId, siteId });
+    const { data, hit } = await getOrSetCache({
+      key,
+      ttlSeconds: CACHE_TTLS.plansList,
+      loader: async () => {
+        const params = [userId];
+        let where = 'where p.user_id = ?';
+        if (siteId) {
+          where += ' and p.site_id = ?';
+          params.push(siteId);
+        }
 
-    const params = [userId];
-    let where = 'where p.user_id = ?';
-    if (siteId) {
-      where += ' and p.site_id = ?';
-      params.push(siteId);
-    }
+        const plans = await query(
+          `select
+             p.id,
+             p.user_id,
+             p.site_id,
+             p.plan_name,
+             p.created_at,
+             p.updated_at,
+             s.site_name,
+             s.address,
+             (select count(*) from plan_points where plan_id = p.id) as points_count
+           from plans p
+           join sites s on s.id = p.site_id and s.user_id = p.user_id
+           ${where}
+           order by p.created_at desc`,
+          params
+        );
 
-    const plans = await query(
-      `select
-         p.id,
-         p.user_id,
-         p.site_id,
-         p.plan_name,
-         p.created_at,
-         p.updated_at,
-         s.site_name,
-         s.address,
-         (select count(*) from plan_points where plan_id = p.id) as points_count
-       from plans p
-       join sites s on s.id = p.site_id and s.user_id = p.user_id
-       ${where}
-       order by p.created_at desc`,
-      params
-    );
+        for (const plan of plans) {
+          plan.pointsCount = Number(plan.pointsCount || 0);
+        }
 
-    for (const plan of plans) {
-      plan.pointsCount = Number(plan.pointsCount || 0);
-    }
+        return { success: true, data: { plans } };
+      },
+    });
 
-    res.json({ success: true, data: { plans } });
+    res.set('X-Cache', hit ? 'HIT' : 'MISS');
+    res.json(data);
   } catch (error) {
-    console.error('Get plans error:', error);
+    logRouteError(req, 'Get plans error', error, { statusCode: 500 });
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la récupération des plans.'
@@ -65,40 +77,52 @@ router.get('/:id', async (req, res) => {
   try {
     const userId = req.user.id;
     const { id } = req.params;
+    const key = cacheKeys.planDetail({ userId, planId: id });
+    const { data, hit } = await getOrSetCache({
+      key,
+      ttlSeconds: CACHE_TTLS.planDetail,
+      loader: async () => {
+        const plan = await get(
+          `select
+             p.id,
+             p.user_id,
+             p.site_id,
+             p.plan_name,
+             p.image_data_url,
+             p.created_at,
+             p.updated_at,
+             s.site_name,
+             s.address
+           from plans p
+           join sites s on s.id = p.site_id and s.user_id = p.user_id
+           where p.id = ? and p.user_id = ?`,
+          [id, userId]
+        );
 
-    const plan = await get(
-      `select
-         p.id,
-         p.user_id,
-         p.site_id,
-         p.plan_name,
-         p.image_data_url,
-         p.created_at,
-         p.updated_at,
-         s.site_name,
-         s.address
-       from plans p
-       join sites s on s.id = p.site_id and s.user_id = p.user_id
-       where p.id = ? and p.user_id = ?`,
-      [id, userId]
-    );
+        if (!plan) {
+          return { success: false, message: 'Plan non trouvé.', __statusCode: 404 };
+        }
 
-    if (!plan) {
-      return res.status(404).json({
+        const points = await query(
+          'SELECT * FROM plan_points WHERE plan_id = ? ORDER BY point_number ASC',
+          [id]
+        );
+        plan.points = points;
+        return { success: true, data: { plan } };
+      },
+    });
+
+    if (data.__statusCode) {
+      return res.status(data.__statusCode).json({
         success: false,
-        message: 'Plan non trouvé.'
+        message: data.message,
       });
     }
 
-    const points = await query(
-      'SELECT * FROM plan_points WHERE plan_id = ? ORDER BY point_number ASC',
-      [id]
-    );
-    plan.points = points;
-
-    res.json({ success: true, data: { plan } });
+    res.set('X-Cache', hit ? 'HIT' : 'MISS');
+    res.json(data);
   } catch (error) {
-    console.error('Get plan error:', error);
+    logRouteError(req, 'Get plan error', error, { statusCode: 500, planId: req.params.id });
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la récupération du plan.'
@@ -113,79 +137,90 @@ router.post('/', validateCreatePlan, async (req, res) => {
     const { siteId, planName, siteName, address, imageDataUrl } = req.body;
 
     const id = uuidv4();
-
-    // Nouveau flux: ajouter un plan dans un chantier existant
-    if (siteId) {
-      const site = await get('select id, site_name, address from sites where id = ? and user_id = ?', [
-        siteId,
-        userId,
-      ]);
-      if (!site) {
-        return res.status(404).json({ success: false, message: 'Chantier non trouvé.' });
-      }
-
-      await run(
-        `insert into plans (id, user_id, site_id, plan_name, site_name, address, image_data_url)
-         values (?, ?, ?, ?, ?, ?, ?)`,
-        [
-          id,
-          userId,
+    const plan = await withTransaction(async (tx) => {
+      // Nouveau flux: ajouter un plan dans un chantier existant
+      if (siteId) {
+        const site = await tx.get('select id, site_name, address from sites where id = ? and user_id = ?', [
           siteId,
-          planName || 'Plan principal',
-          site.siteName,
-          site.address || null,
-          imageDataUrl,
-        ]
-      );
-    } else {
-      // Legacy: creer chantier + plan en une seule action
-      if (!siteName || !imageDataUrl) {
-        return res.status(400).json({
-          success: false,
-          message: 'Nom du chantier et image du plan sont requis.'
-        });
+          userId,
+        ]);
+        if (!site) {
+          throw createHttpError(404, 'Chantier non trouvé.');
+        }
+
+        await tx.run(
+          `insert into plans (id, user_id, site_id, plan_name, site_name, address, image_data_url)
+           values (?, ?, ?, ?, ?, ?, ?)`,
+          [
+            id,
+            userId,
+            siteId,
+            planName || 'Plan principal',
+            site.siteName,
+            site.address || null,
+            imageDataUrl,
+          ]
+        );
+      } else {
+        // Legacy: creer chantier + plan en une seule action
+        if (!siteName || !imageDataUrl) {
+          throw createHttpError(400, 'Nom du chantier et image du plan sont requis.');
+        }
+
+        const newSiteId = uuidv4();
+        await tx.run(
+          `insert into sites (id, user_id, site_name, address)
+           values (?, ?, ?, ?)`,
+          [newSiteId, userId, siteName, address || null]
+        );
+
+        await tx.run(
+          `insert into plans (id, user_id, site_id, plan_name, site_name, address, image_data_url)
+           values (?, ?, ?, ?, ?, ?, ?)`,
+          [id, userId, newSiteId, planName || 'Plan principal', siteName, address || null, imageDataUrl]
+        );
       }
 
-      const newSiteId = uuidv4();
-      await run(
-        `insert into sites (id, user_id, site_name, address)
-         values (?, ?, ?, ?)`,
-        [newSiteId, userId, siteName, address || null]
+      const createdPlan = await tx.get(
+        `select
+           p.id,
+           p.user_id,
+           p.site_id,
+           p.plan_name,
+           p.image_data_url,
+           p.created_at,
+           p.updated_at,
+           s.site_name,
+           s.address
+         from plans p
+         join sites s on s.id = p.site_id and s.user_id = p.user_id
+         where p.id = ? and p.user_id = ?`,
+        [id, userId]
       );
 
-      await run(
-        `insert into plans (id, user_id, site_id, plan_name, site_name, address, image_data_url)
-         values (?, ?, ?, ?, ?, ?, ?)`,
-        [id, userId, newSiteId, planName || 'Plan principal', siteName, address || null, imageDataUrl]
-      );
-    }
+      if (!createdPlan) {
+        throw new Error('Le plan a été créé mais introuvable après insertion.');
+      }
 
-    const plan = await get(
-      `select
-         p.id,
-         p.user_id,
-         p.site_id,
-         p.plan_name,
-         p.image_data_url,
-         p.created_at,
-         p.updated_at,
-         s.site_name,
-         s.address
-       from plans p
-       join sites s on s.id = p.site_id and s.user_id = p.user_id
-       where p.id = ? and p.user_id = ?`,
-      [id, userId]
-    );
+      createdPlan.points = [];
+      return createdPlan;
+    });
 
-    plan.points = [];
-
+    await invalidateUserCache(userId, ['plans', 'sites', 'reports']);
     res.status(201).json({
       success: true,
       message: 'Plan créé avec succès.',
       data: { plan }
     });
   } catch (error) {
-    console.error('Create plan error:', error);
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    logRouteError(req, 'Create plan error', error, { statusCode: 500 });
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la création du plan.'
@@ -212,10 +247,11 @@ router.delete('/:id', async (req, res) => {
     }
 
     await run('DELETE FROM plans WHERE id = ?', [id]);
+    await invalidateUserCache(userId, ['plans', 'sites', 'reports']);
 
     res.json({ success: true, message: 'Plan supprimé.' });
   } catch (error) {
-    console.error('Delete plan error:', error);
+    logRouteError(req, 'Delete plan error', error, { statusCode: 500, planId: req.params.id });
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la suppression.'
@@ -229,17 +265,6 @@ router.post('/:id/points', validateCreatePoint, async (req, res) => {
     const userId = req.user.id;
     const { id: planId } = req.params;
 
-    const plan = await get(
-      'SELECT id FROM plans WHERE id = ? AND user_id = ?',
-      [planId, userId]
-    );
-    if (!plan) {
-      return res.status(404).json({
-        success: false,
-        message: 'Plan non trouvé.'
-      });
-    }
-
     const { positionX, positionY, title, description, category, photoDataUrl, dateLabel, room, status } = req.body;
 
     if (!title || !photoDataUrl || positionX == null || positionY == null) {
@@ -249,31 +274,49 @@ router.post('/:id/points', validateCreatePoint, async (req, res) => {
       });
     }
 
-    // Calculer le prochain numéro de point
-    const maxResult = await get(
-      'SELECT COALESCE(MAX(point_number), 0) as max_num FROM plan_points WHERE plan_id = ?',
-      [planId]
-    );
-    const pointNumber = Number(maxResult.maxNum || 0) + 1;
-
     const pointId = uuidv4();
-    await run(
-      `INSERT INTO plan_points (id, plan_id, user_id, position_x, position_y, title, description,
-        category, photo_data_url, date_label, room, status, point_number)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [pointId, planId, userId, positionX, positionY, title, description || null,
-       category || 'autre', photoDataUrl, dateLabel, room || null, status || 'a_faire', pointNumber]
-    );
+    const point = await withTransaction(async (tx) => {
+      // Verrouille le plan pour serialiser la numerotation des points.
+      const plan = await tx.get(
+        'SELECT id FROM plans WHERE id = ? AND user_id = ? FOR UPDATE',
+        [planId, userId]
+      );
+      if (!plan) {
+        throw createHttpError(404, 'Plan non trouvé.');
+      }
 
-    const point = await get('SELECT * FROM plan_points WHERE id = ?', [pointId]);
+      const maxResult = await tx.get(
+        'SELECT COALESCE(MAX(point_number), 0) as max_num FROM plan_points WHERE plan_id = ?',
+        [planId]
+      );
+      const pointNumber = Number(maxResult.maxNum || 0) + 1;
 
+      await tx.run(
+        `INSERT INTO plan_points (id, plan_id, user_id, position_x, position_y, title, description,
+          category, photo_data_url, date_label, room, status, point_number)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [pointId, planId, userId, positionX, positionY, title, description || null,
+         category || 'autre', photoDataUrl, dateLabel, room || null, status || 'a_faire', pointNumber]
+      );
+
+      return tx.get('SELECT * FROM plan_points WHERE id = ?', [pointId]);
+    });
+
+    await invalidateUserCache(userId, ['plans', 'sites', 'reports']);
     res.status(201).json({
       success: true,
       message: 'Point ajouté.',
       data: { point }
     });
   } catch (error) {
-    console.error('Create point error:', error);
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    logRouteError(req, 'Create point error', error, { statusCode: 500, planId: req.params.id });
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la création du point.'
@@ -315,6 +358,7 @@ router.put('/:id/points/:pointId', validateUpdatePoint, async (req, res) => {
     );
 
     const updated = await get('SELECT * FROM plan_points WHERE id = ?', [pointId]);
+    await invalidateUserCache(userId, ['plans', 'sites', 'reports']);
 
     res.json({
       success: true,
@@ -322,7 +366,11 @@ router.put('/:id/points/:pointId', validateUpdatePoint, async (req, res) => {
       data: { point: updated }
     });
   } catch (error) {
-    console.error('Update point error:', error);
+    logRouteError(req, 'Update point error', error, {
+      statusCode: 500,
+      planId: req.params.id,
+      pointId: req.params.pointId,
+    });
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la mise à jour.'
@@ -348,10 +396,15 @@ router.delete('/:id/points/:pointId', async (req, res) => {
     }
 
     await run('DELETE FROM plan_points WHERE id = ?', [pointId]);
+    await invalidateUserCache(userId, ['plans', 'sites', 'reports']);
 
     res.json({ success: true, message: 'Point supprimé.' });
   } catch (error) {
-    console.error('Delete point error:', error);
+    logRouteError(req, 'Delete point error', error, {
+      statusCode: 500,
+      planId: req.params.id,
+      pointId: req.params.pointId,
+    });
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la suppression.'

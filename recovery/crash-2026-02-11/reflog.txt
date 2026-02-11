@@ -1,0 +1,11 @@
+213f6ee HEAD@{0}: commit: feat codex
+b0b75d9 HEAD@{1}: commit: feat 1 hours with codex correction
+daba697 HEAD@{2}: commit: feat update plan
+7fc9761 HEAD@{3}: commit: feat: update plan pdf
+a6e7356 HEAD@{4}: commit: feat: Add branding configuration and install project dependencies.
+fdb5c6c HEAD@{5}: commit: feat : update for the plan of build
+ac72fb4 HEAD@{6}: commit: feat: Add PlanPointPanel, Premium Theme, and API proxy config
+c00a4a1 HEAD@{7}: checkout: moving from main to next
+c00a4a1 HEAD@{8}: commit: feat: Update UI components, add PageTransition, and sync build artifacts
+bce0a66 HEAD@{9}: Branch: renamed refs/heads/main to refs/heads/main
+bce0a66 HEAD@{11}: commit (initial): chore: Install project dependencies by adding various node modules and npm cache files.

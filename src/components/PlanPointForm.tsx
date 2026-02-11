@@ -146,10 +146,10 @@ export const PlanPointFormFields: React.FC<PlanPointFormFieldsProps> = ({ onSave
             </div>
           ) : (
             <div className="camera__actions" style={{ gap: '12px' }}>
-              <button className="btn btn--primary" onClick={() => inputRef.current?.click()}>
+              <button type="button" className="btn btn--primary" onClick={() => inputRef.current?.click()}>
                 <Camera size={16} /> Prendre une photo
               </button>
-              <button className="btn btn--ghost" onClick={() => inputRef.current?.click()}>
+              <button type="button" className="btn btn--ghost" onClick={() => inputRef.current?.click()}>
                 <Upload size={16} /> Importer
               </button>
             </div>
@@ -233,7 +233,7 @@ export const PlanPointFormFields: React.FC<PlanPointFormFieldsProps> = ({ onSave
         </div>
       </div>
       <div className="plan-panel__form-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '20px' }}>
-        <button className="btn btn--ghost" onClick={onCancel} style={{ padding: '12px 20px' }}>Annuler</button>
+        <button type="button" className="btn btn--ghost" onClick={onCancel} style={{ padding: '12px 20px' }}>Annuler</button>
         <button
           className="btn btn--primary"
           onClick={handleSave}
@@ -253,7 +253,7 @@ export const PlanPointForm: React.FC<PlanPointFormProps> = ({ onSave, onClose, i
       <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '520px' }}>
         <div className="modal__header" style={{ padding: '20px 24px' }}>
           <h3>{isEdit ? 'Modifier le point' : 'Nouveau point'}</h3>
-          <button className="btn btn--ghost" onClick={onClose} style={{ padding: '8px' }}>
+          <button type="button" className="btn btn--ghost" onClick={onClose} style={{ padding: '8px' }}>
             <X size={20} />
           </button>
         </div>

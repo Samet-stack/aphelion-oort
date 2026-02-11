@@ -29,7 +29,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onCapture, onBack, selec
     return (
         <div className="view">
             <div className="view__top">
-                <button onClick={onBack} className="link-btn">
+                <button type="button" onClick={onBack} className="link-btn">
                     <ArrowLeft size={16} /> Changer de chantier
                 </button>
                 <div className="stepper">
@@ -101,11 +101,11 @@ export const CameraView: React.FC<CameraViewProps> = ({ onCapture, onBack, selec
                 </div>
 
                 <div className="camera__actions">
-                    <button className="btn btn--primary" onClick={() => inputRef.current?.click()}>
+                    <button type="button" className="btn btn--primary" onClick={() => inputRef.current?.click()}>
                         <Camera size={18} />
                         Ouvrir la camera
                     </button>
-                    <button className="btn btn--ghost" onClick={() => inputRef.current?.click()}>
+                    <button type="button" className="btn btn--ghost" onClick={() => inputRef.current?.click()}>
                         <Upload size={18} />
                         Importer un fichier
                     </button>

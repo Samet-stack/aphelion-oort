@@ -222,7 +222,7 @@ export const ExtraWorkManager: React.FC<ExtraWorkProps> = ({
                     <div className="modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal__header">
                             <h3>Nouveau Travail Supplémentaire</h3>
-                            <button className="btn btn--ghost" onClick={() => setShowForm(false)}>
+                            <button type="button" className="btn btn--ghost" onClick={() => setShowForm(false)}>
                                 <X size={18} />
                             </button>
                         </div>
@@ -279,7 +279,7 @@ export const ExtraWorkManager: React.FC<ExtraWorkProps> = ({
                             </div>
                         </div>
                         <div className="modal__footer">
-                            <button className="btn btn--ghost" onClick={() => setShowForm(false)}>Annuler</button>
+                            <button type="button" className="btn btn--ghost" onClick={() => setShowForm(false)}>Annuler</button>
                             <button 
                                 className="btn btn--primary" 
                                 onClick={handleAdd}
@@ -298,7 +298,7 @@ export const ExtraWorkManager: React.FC<ExtraWorkProps> = ({
                     <div className="modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal__header">
                             <h3><PenTool size={18} /> Signature client</h3>
-                            <button className="btn btn--ghost" onClick={() => setShowSignature(false)}>
+                            <button type="button" className="btn btn--ghost" onClick={() => setShowSignature(false)}>
                                 <X size={18} />
                             </button>
                         </div>
@@ -321,13 +321,13 @@ export const ExtraWorkManager: React.FC<ExtraWorkProps> = ({
                                     onTouchEnd={stopDrawing}
                                 />
                             </div>
-                            <button className="link-btn" onClick={clearSignature} style={{ marginTop: '12px' }}>
+                            <button type="button" className="link-btn" onClick={clearSignature} style={{ marginTop: '12px' }}>
                                 Effacer la signature
                             </button>
                         </div>
                         <div className="modal__footer">
-                            <button className="btn btn--ghost" onClick={() => setShowSignature(false)}>Annuler</button>
-                            <button className="btn btn--primary" onClick={saveSignature}>
+                            <button type="button" className="btn btn--ghost" onClick={() => setShowSignature(false)}>Annuler</button>
+                            <button type="button" className="btn btn--primary" onClick={saveSignature}>
                                 <Check size={16} /> Valider la signature
                             </button>
                         </div>

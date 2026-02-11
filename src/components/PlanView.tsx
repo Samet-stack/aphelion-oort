@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { ArrowLeft, Plus, Map, Trash2, ZoomIn, ZoomOut, FileText, Loader2, Upload, Camera, ChevronRight, ClipboardList, Search, Play, CheckCircle2, Building2, Layers, FilePlus } from 'lucide-react';
 import { plansApi, sitesApi, ApiPlan, ApiPlanPoint, ApiPlanListItem, ApiSite, ApiSiteListItem } from '../services/api';
 import { PlanPointFormData } from './PlanPointForm';
 import { PlanPointPanel } from './PlanPointPanel';
 import { useToast } from '../contexts/ToastContext';
-import { ConfirmModal } from './ui/ConfirmModal';
+import { ConfirmModal, PageHeader, EmptyState, LoadingState } from './ui';
+import { PinMarker } from './PinMarker';
 
 interface PlanViewProps {
   onBack: () => void;
@@ -66,71 +67,7 @@ const fileToDataUrl = (file: File, maxW = 2000, maxH = 2000, quality = 0.8): Pro
 };
 
 
-const PinMarker: React.FC<{
-  point: ApiPlanPoint;
-  isSelected: boolean;
-  onClick: (e: React.MouseEvent) => void;
-}> = ({ point, isSelected, onClick }) => {
-  const isProblem = point.status === 'a_faire' || point.category === 'defaut';
-  const color = isProblem ? '#ef4444' : point.status === 'termine' ? '#22c55e' : '#f59e0b';
 
-  return (
-    <div
-      className={`pin-marker ${isSelected ? 'pin-marker--active' : ''} ${isProblem ? 'pin-marker--problem' : ''}`}
-      data-point-id={point.id}
-      style={{
-        left: `${point.positionX}%`,
-        top: `${point.positionY}%`,
-        animation: 'pin-pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards',
-        animationDelay: `${Math.random() * 0.2}s` // Random delay for natural feel
-      }}
-      onClick={onClick}
-      title={`#${point.pointNumber} ${point.title}`}
-    >
-      <div className="pin-svg-wrapper" style={{ transform: 'translate(-50%, -100%)' }}>
-        <svg
-          width="40"
-          height="40"
-          viewBox="0 0 40 40"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-          className="pin-svg"
-        >
-          <path
-            d="M20 0C11.1634 0 4 7.16344 4 16C4 26.5 20 40 20 40C20 40 36 26.5 36 16C36 7.16344 28.8366 0 20 0Z"
-            fill={color}
-          />
-          <circle cx="20" cy="16" r="6" fill="#0f172a" fillOpacity="0.3" />
-          <circle cx="20" cy="16" r="3" fill="white" />
-          {isProblem && (
-            <path
-              d="M20 8V18"
-              stroke="white"
-              strokeWidth="2"
-              strokeLinecap="round"
-              style={{ opacity: 0.8 }}
-            />
-          )}
-        </svg>
-        {/* Number Badge */}
-        <div
-          style={{
-            position: 'absolute',
-            top: '5px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            color: 'white',
-            fontSize: '10px',
-            fontWeight: 'bold',
-            textShadow: '0 1px 2px rgba(0,0,0,0.5)'
-          }}
-        >
-          {point.pointNumber}
-        </div>
-      </div>
-    </div>
-  );
-};
 
 export const PlanView: React.FC<PlanViewProps> = ({
   onBack,
@@ -188,6 +125,41 @@ export const PlanView: React.FC<PlanViewProps> = ({
   // Action plan filters
   const [actionQuery, setActionQuery] = useState('');
   const [actionCategory, setActionCategory] = useState<'all' | string>('all');
+
+  // Always compute hooks at top-level (React rules-of-hooks).
+  const allPointsSorted = useMemo(() => {
+    if (!currentPlan) return [];
+    return [...currentPlan.points].sort((a, b) => a.pointNumber - b.pointNumber);
+  }, [currentPlan]);
+
+  const filteredForAction = useMemo(() => {
+    const q = actionQuery.trim().toLowerCase();
+    return allPointsSorted.filter((p) => {
+      if (q) {
+        const hay = `${p.pointNumber} ${p.title} ${p.description || ''} ${p.room || ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      if (actionCategory !== 'all' && p.category !== actionCategory) return false;
+      return true;
+    });
+  }, [allPointsSorted, actionQuery, actionCategory]);
+
+  const byStatus = useMemo(
+    () => ({
+      a_faire: filteredForAction.filter((p) => p.status === 'a_faire'),
+      en_cours: filteredForAction.filter((p) => p.status === 'en_cours'),
+      termine: filteredForAction.filter((p) => p.status === 'termine'),
+    }),
+    [filteredForAction]
+  );
+
+  const completionRate = useMemo(() => {
+    if (!currentPlan) return 0;
+    const totalPoints = currentPlan.points.length;
+    if (totalPoints === 0) return 0;
+    const donePoints = currentPlan.points.filter((p) => p.status === 'termine').length;
+    return Math.round((donePoints / totalPoints) * 100);
+  }, [currentPlan]);
 
   // Click tracking for distinguishing click vs drag
   const mouseDownPos = useRef<{ x: number; y: number } | null>(null);
@@ -716,37 +688,30 @@ export const PlanView: React.FC<PlanViewProps> = ({
         <>
           <div className="view">
             <div className="view__top">
-              <button onClick={onBack} className="link-btn">
+              <button type="button" onClick={onBack} className="link-btn">
                 <ArrowLeft size={16} /> Accueil
               </button>
             </div>
 
             <div className="card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <div>
-                  <h2 style={{ fontSize: '1.3rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Building2 size={22} /> Chantiers
-                  </h2>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '4px' }}>
-                    Organisez vos plans et vos points par chantier.
-                  </p>
-                </div>
-                <button className="btn btn--primary" onClick={handleOpenCreateSite}>
+              <PageHeader
+                title="Chantiers"
+                icon={Building2}
+                subtitle="Organisez vos plans et vos points par chantier."
+              >
+                <button type="button" className="btn btn--primary" onClick={handleOpenCreateSite}>
                   <Plus size={16} /> Nouveau chantier
                 </button>
-              </div>
+              </PageHeader>
 
               {loadingSites ? (
-                <div style={{ textAlign: 'center', padding: '40px 0' }}>
-                  <Loader2 size={24} className="spin" />
-                  <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>Chargement...</p>
-                </div>
+                <LoadingState text="Chargement..." />
               ) : sites.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>
-                  <Building2 size={40} style={{ opacity: 0.3, marginBottom: '12px' }} />
-                  <p>Aucun chantier pour le moment.</p>
-                  <p style={{ fontSize: '0.85rem' }}>Cliquez sur "Nouveau chantier" pour commencer.</p>
-                </div>
+                <EmptyState
+                  icon={Building2}
+                  title="Aucun chantier pour le moment."
+                  hint='Cliquez sur "Nouveau chantier" pour commencer.'
+                />
               ) : (
                 <div className="plan-list">
                   {sites.map((site) => (
@@ -762,9 +727,8 @@ export const PlanView: React.FC<PlanViewProps> = ({
                         <span className="badge badge--info">{site.plansCount} plan(s)</span>
                         <span className="badge badge--info">{site.pointsCount} point(s)</span>
                         <button
-                          className="btn btn--ghost"
+                          className="btn btn--ghost btn-danger-ghost"
                           onClick={(e) => handleDeleteSite(site.id, e)}
-                          style={{ color: 'var(--danger)', padding: '4px' }}
                         >
                           <Trash2 size={16} />
                         </button>
@@ -777,18 +741,18 @@ export const PlanView: React.FC<PlanViewProps> = ({
 
             {loadingSite && (
               <div className="modal-overlay">
-                <div style={{ textAlign: 'center', color: 'white' }}>
+                <div className="modal-loading">
                   <Loader2 size={32} className="spin" />
-                  <p style={{ marginTop: '12px' }}>Chargement du chantier...</p>
+                  <p className="modal-loading__text">Chargement du chantier...</p>
                 </div>
               </div>
             )}
 
             {loadingPlan && (
               <div className="modal-overlay">
-                <div style={{ textAlign: 'center', color: 'white' }}>
+                <div className="modal-loading">
                   <Loader2 size={32} className="spin" />
-                  <p style={{ marginTop: '12px' }}>Chargement du plan...</p>
+                  <p className="modal-loading__text">Chargement du plan...</p>
                 </div>
               </div>
             )}
@@ -814,15 +778,13 @@ export const PlanView: React.FC<PlanViewProps> = ({
         <>
           <div className="view">
             <div className="view__top">
-              <button onClick={() => setSubView('SITES')} className="link-btn">
+              <button type="button" onClick={() => setSubView('SITES')} className="link-btn">
                 <ArrowLeft size={16} /> Chantiers
               </button>
             </div>
 
           <div className="card">
-            <h2 style={{ fontSize: '1.3rem', fontWeight: 800, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Plus size={20} /> Nouveau chantier
-            </h2>
+            <PageHeader title="Nouveau chantier" icon={Plus} compact />
 
             <div className="plan-upload">
               <div className="form-field">
@@ -848,10 +810,9 @@ export const PlanView: React.FC<PlanViewProps> = ({
               </div>
 
               <button
-                className="btn btn--primary"
+                className="btn btn--primary form-actions--full"
                 onClick={handleCreateSiteSubmit}
                 disabled={!siteNameInput.trim() || uploading}
-                style={{ width: '100%' }}
               >
                 {uploading ? <><Loader2 size={16} className="spin" /> Creation...</> : 'Creer le chantier'}
               </button>
@@ -880,13 +841,12 @@ export const PlanView: React.FC<PlanViewProps> = ({
           <>
             <div className="view">
               <div className="view__top">
-                <button onClick={handleBackToSites} className="link-btn">
+                <button type="button" onClick={handleBackToSites} className="link-btn">
                   <ArrowLeft size={16} /> Chantiers
                 </button>
               </div>
-              <div className="card" style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>
-                <Building2 size={40} style={{ opacity: 0.3, marginBottom: '12px' }} />
-                <p>Chantier introuvable.</p>
+              <div className="card">
+                <EmptyState icon={Building2} title="Chantier introuvable." compact />
               </div>
             </div>
             <ConfirmModal
@@ -907,47 +867,40 @@ export const PlanView: React.FC<PlanViewProps> = ({
         <>
           <div className="view">
             <div className="view__top">
-              <button onClick={handleBackToSites} className="link-btn">
+              <button type="button" onClick={handleBackToSites} className="link-btn">
                 <ArrowLeft size={16} /> Chantiers
               </button>
             </div>
 
             <div className="card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
-                <div>
-                  <h2 style={{ fontSize: '1.2rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Building2 size={20} /> {currentSite.siteName}
-                  </h2>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '4px' }}>
-                    {currentSite.address || 'Adresse non renseignée'}
-                  </p>
-                </div>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <PageHeader
+                title={currentSite.siteName}
+                icon={Building2}
+                subtitle={currentSite.address || 'Adresse non renseignée'}
+                compact
+              >
+                <div className="card-actions">
                   <button
-                    className="btn btn--ghost"
+                    className="btn btn--ghost btn-danger-ghost"
                     onClick={(e) => handleDeleteSite(currentSite.id, e)}
-                    style={{ color: 'var(--danger)' }}
                     title="Supprimer le chantier"
                   >
                     <Trash2 size={16} />
                   </button>
-                  <button className="btn btn--primary" onClick={handleOpenUploadPlan}>
+                  <button type="button" className="btn btn--primary" onClick={handleOpenUploadPlan}>
                     <Plus size={16} /> Ajouter un plan
                   </button>
                 </div>
-              </div>
+              </PageHeader>
 
               {loadingSite ? (
-                <div style={{ textAlign: 'center', padding: '40px 0' }}>
-                  <Loader2 size={24} className="spin" />
-                  <p style={{ color: 'var(--text-muted)', marginTop: '8px' }}>Chargement...</p>
-                </div>
+                <LoadingState text="Chargement..." />
               ) : sitePlans.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>
-                  <Layers size={40} style={{ opacity: 0.3, marginBottom: '12px' }} />
-                  <p>Aucun plan pour ce chantier.</p>
-                  <p style={{ fontSize: '0.85rem' }}>Cliquez sur "Ajouter un plan" pour commencer.</p>
-                </div>
+                <EmptyState
+                  icon={Layers}
+                  title="Aucun plan pour ce chantier."
+                  hint='Cliquez sur "Ajouter un plan" pour commencer.'
+                />
               ) : (
                 <div className="plan-list">
                   {sitePlans.map((plan) => (
@@ -961,9 +914,8 @@ export const PlanView: React.FC<PlanViewProps> = ({
                       <div className="plan-card__badge">
                         <span className="badge badge--info">{plan.pointsCount} point(s)</span>
                         <button
-                          className="btn btn--ghost"
+                          className="btn btn--ghost btn-danger-ghost"
                           onClick={(e) => handleDeletePlan(plan.id, e)}
-                          style={{ color: 'var(--danger)', padding: '4px' }}
                         >
                           <Trash2 size={16} />
                         </button>
@@ -976,9 +928,9 @@ export const PlanView: React.FC<PlanViewProps> = ({
 
             {loadingPlan && (
               <div className="modal-overlay">
-                <div style={{ textAlign: 'center', color: 'white' }}>
+                <div className="modal-loading">
                   <Loader2 size={32} className="spin" />
-                  <p style={{ marginTop: '12px' }}>Chargement du plan...</p>
+                  <p className="modal-loading__text">Chargement du plan...</p>
                 </div>
               </div>
             )}
@@ -1005,13 +957,12 @@ export const PlanView: React.FC<PlanViewProps> = ({
           <>
             <div className="view">
               <div className="view__top">
-                <button onClick={handleBackToSites} className="link-btn">
+                <button type="button" onClick={handleBackToSites} className="link-btn">
                   <ArrowLeft size={16} /> Chantiers
                 </button>
               </div>
-              <div className="card" style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>
-                <Layers size={40} style={{ opacity: 0.3, marginBottom: '12px' }} />
-                <p>Veuillez d'abord sélectionner un chantier.</p>
+              <div className="card">
+                <EmptyState icon={Layers} title="Veuillez d'abord sélectionner un chantier." compact />
               </div>
             </div>
             <ConfirmModal
@@ -1032,15 +983,13 @@ export const PlanView: React.FC<PlanViewProps> = ({
         <>
           <div className="view">
             <div className="view__top">
-              <button onClick={() => setSubView('SITE')} className="link-btn">
+              <button type="button" onClick={() => setSubView('SITE')} className="link-btn">
                 <ArrowLeft size={16} /> Retour chantier
               </button>
             </div>
 
             <div className="card">
-              <h2 style={{ fontSize: '1.3rem', fontWeight: 800, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <FilePlus size={20} /> Ajouter un plan
-              </h2>
+              <PageHeader title="Ajouter un plan" icon={FilePlus} compact />
 
               <div className="plan-upload">
                 <div className="form-field">
@@ -1073,9 +1022,8 @@ export const PlanView: React.FC<PlanViewProps> = ({
                         <img src={planImageDataUrl} alt="Preview" />
                       </div>
                       <button
-                        className="btn btn--ghost"
+                        className="btn btn--ghost upload-preview-actions"
                         onClick={() => uploadInputRef.current?.click()}
-                        style={{ marginTop: '8px', width: '100%' }}
                       >
                         <Camera size={16} /> Changer l'image
                       </button>
@@ -1096,10 +1044,9 @@ export const PlanView: React.FC<PlanViewProps> = ({
                 </div>
 
                 <button
-                  className="btn btn--primary"
+                  className="btn btn--primary form-actions--full"
                   onClick={handleUploadPlanSubmit}
                   disabled={!planNameInput.trim() || !planImageDataUrl || uploading}
-                  style={{ width: '100%' }}
                 >
                   {uploading ? <><Loader2 size={16} className="spin" /> Creation...</> : 'Creer le plan'}
                 </button>
@@ -1124,33 +1071,12 @@ export const PlanView: React.FC<PlanViewProps> = ({
     // VIEWER view
     if (subView === 'VIEWER' && currentPlan) {
       const isPanelOpen = panelMode !== 'closed';
-      const allPointsSorted = [...currentPlan.points].sort((a, b) => a.pointNumber - b.pointNumber);
-
-    const filteredForAction = allPointsSorted.filter((p) => {
-      const q = actionQuery.trim().toLowerCase();
-      if (q) {
-        const hay = `${p.pointNumber} ${p.title} ${p.description || ''} ${p.room || ''}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      if (actionCategory !== 'all' && p.category !== actionCategory) return false;
-      return true;
-    });
-
-    const byStatus = {
-      a_faire: filteredForAction.filter((p) => p.status === 'a_faire'),
-      en_cours: filteredForAction.filter((p) => p.status === 'en_cours'),
-      termine: filteredForAction.filter((p) => p.status === 'termine'),
-    };
-
-    const totalPoints = currentPlan.points.length;
-    const donePoints = currentPlan.points.filter((p) => p.status === 'termine').length;
-    const completionRate = totalPoints > 0 ? Math.round((donePoints / totalPoints) * 100) : 0;
 
     return (
       <>
           <div className="view">
           <div className="view__top">
-            <button onClick={handleBackToSite} className="link-btn">
+            <button type="button" onClick={handleBackToSite} className="link-btn">
               <ArrowLeft size={16} /> Retour chantier
             </button>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -1181,11 +1107,11 @@ export const PlanView: React.FC<PlanViewProps> = ({
             <div className="plan-viewer-layout__main">
               <div className="card">
                 {/* Plan header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <div className="section-header">
                   <div>
-                    <h2 style={{ fontSize: '1.2rem', fontWeight: 800 }}>{currentPlan.siteName}</h2>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '2px' }}>
-                      <Layers size={14} style={{ display: 'inline', marginRight: 6, verticalAlign: '-2px', opacity: 0.9 }} />
+                    <h2 className="section-header__title">{currentPlan.siteName}</h2>
+                    <p className="section-header__meta">
+                      <Layers size={14} className="icon-inline" />
                       {currentPlan.planName}
                       {currentPlan.address ? ` · ${currentPlan.address}` : ''}
                     </p>
@@ -1223,20 +1149,20 @@ export const PlanView: React.FC<PlanViewProps> = ({
                   <div className="plan-viewer" ref={viewerRef}>
                     {/* Zoom controls */}
                     <div className="plan-viewer__controls">
-                      <button className="btn btn--ghost" onClick={() => setZoom((z) => Math.min(z + 0.25, 4))} title="Zoom +">
+                      <button type="button" className="btn btn--ghost" onClick={() => setZoom((z) => Math.min(z + 0.25, 4))} title="Zoom +">
                         <ZoomIn size={18} />
                       </button>
-                      <button className="btn btn--ghost" onClick={() => setZoom((z) => Math.max(z - 0.25, 0.5))} title="Zoom -">
+                      <button type="button" className="btn btn--ghost" onClick={() => setZoom((z) => Math.max(z - 0.25, 0.5))} title="Zoom -">
                         <ZoomOut size={18} />
                       </button>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', padding: '4px 8px' }}>
+                      <span className="zoom-indicator">
                         {Math.round(zoom * 100)}%
                       </span>
                     </div>
 
                     <div
-                      className="plan-viewer__canvas"
-                      style={{ transform: `scale(${zoom})`, transformOrigin: '0 0' }}
+                      className="plan-viewer__canvas transform-zoom"
+                      style={{ transform: `scale(${zoom})` }}
                       onMouseDown={handleCanvasMouseDown}
                       onClick={handleCanvasClick}
                     >
@@ -1260,14 +1186,14 @@ export const PlanView: React.FC<PlanViewProps> = ({
                     </div>
                   </div>
 
-                  <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '8px', textAlign: 'center' }}>
+                  <p className="hint-text">
                     Cliquez sur le plan pour ajouter un point
                   </p>
 
                   {/* Points list */}
                   {currentPlan.points.length > 0 && (
-                    <div style={{ marginTop: '20px' }}>
-                      <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px' }}>
+                    <div className="points-section">
+                      <h3 className="points-section__title">
                         Points d'inspection ({currentPlan.points.length})
                       </h3>
                       <div className="plan-points-list">
@@ -1282,25 +1208,17 @@ export const PlanView: React.FC<PlanViewProps> = ({
                             }}
                           >
                             <div
-                              className="plan-points-list__number"
-                              style={{
-                                background:
-                                  pt.status === 'termine'
-                                    ? 'var(--success)'
-                                    : pt.status === 'en_cours'
-                                      ? 'var(--warning)'
-                                      : 'var(--danger)',
-                              }}
+                              className={`plan-points-list__number bg-status-${pt.status}`}
                             >
                               {pt.pointNumber}
                             </div>
                             <div className="plan-points-list__content">
                               <div className="plan-points-list__title">{pt.title}</div>
                               <div className="plan-points-list__badges">
-                                <span className="badge badge--info" style={{ fontSize: '0.7rem' }}>
+                                <span className="badge badge--info badge-sm">
                                   {categoryLabels[pt.category] || pt.category}
                                 </span>
-                                <span className={`badge ${statusBadge[pt.status]}`} style={{ fontSize: '0.7rem' }}>
+                                <span className={`badge ${statusBadge[pt.status]} badge-sm`}>
                                   {statusLabels[pt.status]}
                                 </span>
                               </div>
@@ -1349,7 +1267,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
                     </button>
                   </div>
 
-                  <div className="plan-action__hint">
+                  <div className="plan-action__hint action-hint">
                     Affichage: <strong>{filteredForAction.length}</strong> / {currentPlan.points.length} point(s)
                   </div>
 
@@ -1391,15 +1309,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
                                     }}
                                   >
                                     <div
-                                      className="plan-action-card__num"
-                                      style={{
-                                        background:
-                                          pt.status === 'termine'
-                                            ? 'var(--success)'
-                                            : pt.status === 'en_cours'
-                                              ? 'var(--warning)'
-                                              : 'var(--danger)',
-                                      }}
+                                      className={`plan-action-card__num bg-status-${pt.status}`}
                                     >
                                       {pt.pointNumber}
                                     </div>

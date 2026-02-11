@@ -16,6 +16,7 @@ import {
   sendVerificationEmail,
   sendWelcomeEmail 
 } from '../services/email.js';
+import { logRouteError } from '../services/logger.js';
 
 const router = express.Router();
 
@@ -23,30 +24,6 @@ const router = express.Router();
 router.post('/register', registerLimiter, validateRegister, async (req, res) => {
   try {
     const { email, password, firstName, lastName, companyName } = req.body;
-    
-    // Validation
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email et mot de passe requis.'
-      });
-    }
-    
-    // Validation email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Format d\'email invalide.'
-      });
-    }
-    
-    if (password.length < 6) {
-      return res.status(400).json({
-        success: false,
-        message: 'Le mot de passe doit contenir au moins 6 caractères.'
-      });
-    }
     
     // Vérifier si l'email existe déjà
     const existingUser = await get('SELECT id FROM users WHERE email = ?', [email.toLowerCase()]);
@@ -79,7 +56,7 @@ router.post('/register', registerLimiter, validateRegister, async (req, res) => 
     });
     
   } catch (error) {
-    console.error('Register error:', error);
+    logRouteError(req, 'Register error', error, { statusCode: 500 });
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la création du compte.'
@@ -121,7 +98,7 @@ router.get('/verify-email', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Verify email error:', error);
+    logRouteError(req, 'Verify email error', error, { statusCode: 500 });
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la vérification de l\'email.'
@@ -171,7 +148,7 @@ router.post('/resend-verification', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Resend verification error:', error);
+    logRouteError(req, 'Resend verification error', error, { statusCode: 500 });
     res.status(500).json({
       success: false,
       message: 'Erreur lors de l\'envoi de l\'email.'
@@ -184,30 +161,19 @@ router.post('/login', authLimiter, validateLogin, async (req, res) => {
   try {
     const { email, password } = req.body;
     
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email et mot de passe requis.'
-      });
-    }
-    
     // Récupérer l'utilisateur
     const user = await get(
       'SELECT id, email, password, first_name, last_name, company_name, role, email_verified, created_at FROM users WHERE email = ?',
       [email.toLowerCase()]
     );
     
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Email ou mot de passe incorrect.'
-      });
-    }
+    // Timing attack protection: always run bcrypt.compare even if user not found
+    // Use a dummy hash with same cost factor to ensure constant-time comparison
+    const dummyHash = '$2a$10$invalidhash.invalidhash.invalidhash.inva';
+    const passwordToCheck = user ? user.password : dummyHash;
+    const isValidPassword = await bcrypt.compare(password, passwordToCheck);
     
-    // Vérifier le mot de passe
-    const isValidPassword = await bcrypt.compare(password, user.password);
-    
-    if (!isValidPassword) {
+    if (!user || !isValidPassword) {
       return res.status(401).json({
         success: false,
         message: 'Email ou mot de passe incorrect.'
@@ -233,7 +199,7 @@ router.post('/login', authLimiter, validateLogin, async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Login error:', error);
+    logRouteError(req, 'Login error', error, { statusCode: 500 });
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la connexion.'
@@ -279,7 +245,7 @@ router.put('/profile', authMiddleware, validateUpdateProfile, async (req, res) =
     });
     
   } catch (error) {
-    console.error('Update profile error:', error);
+    logRouteError(req, 'Update profile error', error, { statusCode: 500 });
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la mise à jour du profil.'
@@ -321,7 +287,7 @@ router.put('/password', authMiddleware, validateChangePassword, async (req, res)
     });
     
   } catch (error) {
-    console.error('Change password error:', error);
+    logRouteError(req, 'Change password error', error, { statusCode: 500 });
     res.status(500).json({
       success: false,
       message: 'Erreur lors du changement de mot de passe.'

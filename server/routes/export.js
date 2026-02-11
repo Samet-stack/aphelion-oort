@@ -1,8 +1,21 @@
 import express from 'express';
 import { query } from '../database.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { logRouteError } from '../services/logger.js';
 
 const router = express.Router();
+
+// Sanitize CSV cell to prevent Excel injection attacks
+// Prefix dangerous characters (=, +, -, @) with single quote
+const sanitizeCsvCell = (cell) => {
+  if (cell === null || cell === undefined) return '';
+  const str = String(cell).replace(/\n/g, ' ').replace(/;/g, ',');
+  // Prevent formula injection by prefixing dangerous characters with '
+  if (/^[+=\-@]/.test(str)) {
+    return "'" + str;
+  }
+  return str;
+};
 
 router.use(authMiddleware);
 
@@ -54,17 +67,17 @@ router.get('/csv', async (req, res) => {
     
     for (const r of reports) {
       const row = [
-        r.reportId,
-        new Date(r.createdAt).toLocaleDateString('fr-FR'),
-        r.siteName || '',
-        r.clientName || '',
-        r.address || '',
-        r.coordinates || '',
-        r.priority || '',
-        r.category || '',
-        Number(r.extraWorksCount || 0),
-        Number(r.totalExtraCost || 0),
-        (r.description || '').replace(/\n/g, ' ').replace(/;/g, ',')
+        sanitizeCsvCell(r.reportId),
+        sanitizeCsvCell(new Date(r.createdAt).toLocaleDateString('fr-FR')),
+        sanitizeCsvCell(r.siteName),
+        sanitizeCsvCell(r.clientName),
+        sanitizeCsvCell(r.address),
+        sanitizeCsvCell(r.coordinates),
+        sanitizeCsvCell(r.priority),
+        sanitizeCsvCell(r.category),
+        sanitizeCsvCell(Number(r.extraWorksCount || 0)),
+        sanitizeCsvCell(Number(r.totalExtraCost || 0)),
+        sanitizeCsvCell(r.description)
       ];
       csvRows.push(row.map(cell => `"${cell}"`).join(';'));
     }
@@ -76,7 +89,7 @@ router.get('/csv', async (req, res) => {
     res.send('\uFEFF' + csv); // BOM pour Excel
     
   } catch (error) {
-    console.error('Export CSV error:', error);
+    logRouteError(req, 'Export CSV error', error, { statusCode: 500 });
     res.status(500).json({
       success: false,
       message: 'Erreur lors de l\'export CSV.'
@@ -152,7 +165,7 @@ router.get('/excel', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Export Excel error:', error);
+    logRouteError(req, 'Export Excel error', error, { statusCode: 500 });
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la préparation de l\'export Excel.'
@@ -195,7 +208,7 @@ router.get('/report/:id', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Export report error:', error);
+    logRouteError(req, 'Export report error', error, { statusCode: 500, reportId: req.params.id });
     res.status(500).json({
       success: false,
       message: 'Erreur lors de l\'export du rapport.'

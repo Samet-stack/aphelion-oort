@@ -433,7 +433,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
         return (
             <div className="view">
                 <div className="view__top">
-                    <button onClick={onReset} className="link-btn">
+                    <button type="button" onClick={onReset} className="link-btn">
                         <ArrowLeft size={16} /> Annuler
                     </button>
                     <div className="stepper">
@@ -473,7 +473,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
     return (
         <div className="view">
             <div className="view__top">
-                <button onClick={onReset} className="link-btn">
+                <button type="button" onClick={onReset} className="link-btn">
                     <ArrowLeft size={16} /> Nouveau rapport
                 </button>
                 <div className="stepper">
@@ -534,12 +534,12 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
                                 <Shield size={12} /> Certifie
                             </span>
                         )}
-                        <button className="btn btn--ghost" onClick={onBack}>
+                        <button type="button" className="btn btn--ghost" onClick={onBack}>
                             <FileText size={18} />
                             Reprendre la photo
                         </button>
                         {/* Pilier 4: Bouton partage */}
-                        <button className="btn btn--ghost" onClick={() => setShowShare(true)}>
+                        <button type="button" className="btn btn--ghost" onClick={() => setShowShare(true)}>
                             <Share2 size={18} />
                             Partager
                         </button>

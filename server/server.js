@@ -1,10 +1,15 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
+import helmet from 'helmet';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { initDb } from './database.js';
 import { verifyEmailConfig } from './services/email.js';
+import { getCacheStatus, initializeCache } from './services/cache.js';
+import { logger } from './services/logger.js';
+import { apiLimiter } from './middleware/rateLimit.js';
+import { attachRequestContext, httpRequestLogger } from './middleware/requestLogger.js';
 import authRoutes from './routes/auth.js';
 import reportRoutes from './routes/reports.js';
 import shareRoutes from './routes/shares.js';
@@ -13,15 +18,32 @@ import siteRoutes from './routes/sites.js';
 import planRoutes from './routes/plans.js';
 import aiRoutes from './routes/ai.js';
 
-dotenv.config();
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
+app.set('trust proxy', true);
+app.use(attachRequestContext);
+app.use(httpRequestLogger);
+
+// Security middleware
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "blob:"],
+    },
+  },
+}));
+
+// Rate limiting global
+app.use('/api/', apiLimiter);
+
+// CORS configuration
 const allowedOrigins = new Set(
   [
     process.env.FRONTEND_URL,
@@ -32,20 +54,25 @@ const allowedOrigins = new Set(
 );
 
 const isAllowedOrigin = (origin) => {
-  if (!origin) return true; // curl / server-to-server
+  // Allow requests without Origin header (curl, health checks, server-to-server).
+  // Browser CORS protection still applies for cross-origin frontends.
+  if (!origin) return true;
   if (allowedOrigins.has(origin)) return true;
-  try {
-    const { hostname } = new URL(origin);
-    // Allow Vercel preview deployments for demos.
-    return hostname.endsWith('.vercel.app');
-  } catch {
-    return false;
-  }
+  // Only allow specific Vercel deployments, not all .vercel.app
+  const allowedVercelSlug = process.env.VERCEL_SLUG;
+  if (allowedVercelSlug && origin.includes(allowedVercelSlug)) return true;
+  return false;
 };
 
 app.use(
   cors({
-    origin: (origin, cb) => cb(null, isAllowedOrigin(origin)),
+    origin: (origin, cb) => {
+      if (isAllowedOrigin(origin)) {
+        cb(null, origin);
+      } else {
+        cb(new Error('CORS not allowed'));
+      }
+    },
     credentials: false,
   })
 );
@@ -66,7 +93,8 @@ app.get('/api/health', (req, res) => {
   res.json({ 
     success: true, 
     message: 'SiteFlow API is running',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    cache: getCacheStatus(),
   });
 });
 
@@ -81,7 +109,17 @@ if (process.env.NODE_ENV === 'production') {
 
 // Error handler
 app.use((err, req, res, next) => {
-  console.error('Server error:', err);
+  logger.error('Unhandled server error', {
+    requestId: req?.requestId,
+    method: req?.method,
+    path: req?.originalUrl || req?.url,
+    userId: req?.user?.id,
+    error: {
+      name: err?.name,
+      message: err?.message,
+      stack: err?.stack,
+    },
+  });
   res.status(500).json({
     success: false,
     message: 'Erreur serveur interne.'
@@ -104,28 +142,28 @@ const start = async () => {
     if (shouldVerifySmtp) {
       await verifyEmailConfig();
     }
+
+    await initializeCache();
     
     // Démarrer le serveur
     app.listen(PORT, () => {
-      console.log('╔════════════════════════════════════════════════╗');
-      console.log('║         SITEFLOW PRO API SERVER                ║');
-      console.log('╠════════════════════════════════════════════════╣');
-      console.log(`║  🚀 Port: ${PORT}                             ║`);
-      console.log(`║  🐘 Base: PostgreSQL (Supabase)                ║`);
-      console.log(`║  🔐 Auth: JWT (7j expiration)                  ║`);
-      console.log('╚════════════════════════════════════════════════╝');
-      console.log('');
-      console.log('Endpoints disponibles:');
-      console.log('  POST /api/auth/register - Créer un compte');
-      console.log('  POST /api/auth/login    - Connexion');
-      console.log('  GET  /api/auth/me       - Profil (protégé)');
-      console.log('  GET  /api/reports       - Liste rapports (protégé)');
-      console.log('  POST /api/reports       - Créer rapport (protégé)');
-      console.log('');
+      logger.info('API server started', {
+        port: Number(PORT),
+        nodeEnv: process.env.NODE_ENV || 'development',
+        database: 'postgresql',
+        auth: 'jwt',
+        cache: getCacheStatus(),
+      });
     });
     
   } catch (error) {
-    console.error('Failed to start server:', error);
+    logger.error('Failed to start server', {
+      error: {
+        name: error?.name,
+        message: error?.message,
+        stack: error?.stack,
+      },
+    });
     process.exit(1);
   }
 };

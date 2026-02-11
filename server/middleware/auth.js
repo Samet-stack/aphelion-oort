@@ -1,7 +1,11 @@
 import jwt from 'jsonwebtoken';
 import { get } from '../database.js';
+import { logRouteError } from '../services/logger.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'siteflow-super-secret-key-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is required');
+}
 const JWT_EXPIRES = '7d';
 
 // Générer un token JWT
@@ -58,7 +62,7 @@ export const authMiddleware = async (req, res, next) => {
     next();
     
   } catch (error) {
-    console.error('Auth middleware error:', error);
+    logRouteError(req, 'Auth middleware error', error, { statusCode: 500 });
     res.status(500).json({ 
       success: false, 
       message: 'Erreur serveur lors de l\'authentification.' 

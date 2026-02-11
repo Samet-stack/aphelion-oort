@@ -149,7 +149,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
             >
-                <button onClick={onBack} className="link-btn text-muted">
+                <button type="button" onClick={onBack} className="link-btn text-muted">
                     <ArrowLeft size={16} /> Retour
                 </button>
                 <div className="stepper">

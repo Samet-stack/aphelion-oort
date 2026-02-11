@@ -186,12 +186,12 @@ export const PlanPointPanel: React.FC<PlanPointPanelProps> = ({
                 <div className="plan-panel__quick">
                   <div className="plan-panel__quick-actions">
                     {onFocusPoint && (
-                      <button className="btn btn--ghost" onClick={() => onFocusPoint(point)}>
+                      <button type="button" className="btn btn--ghost" onClick={() => onFocusPoint(point)}>
                         <MapPin size={16} /> Voir sur le plan
                       </button>
                     )}
                     {onDownloadPointPdf && (
-                      <button className="btn btn--ghost" onClick={() => onDownloadPointPdf(point)}>
+                      <button type="button" className="btn btn--ghost" onClick={() => onDownloadPointPdf(point)}>
                         <FileText size={16} /> Fiche PDF
                       </button>
                     )}

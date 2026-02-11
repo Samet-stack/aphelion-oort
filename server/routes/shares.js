@@ -2,6 +2,7 @@ import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { query, get, run } from '../database.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { logRouteError } from '../services/logger.js';
 
 const router = express.Router();
 
@@ -65,7 +66,7 @@ router.post('/', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Share report error:', error);
+    logRouteError(req, 'Share report error', error, { statusCode: 500 });
     res.status(500).json({
       success: false,
       message: 'Erreur lors du partage du rapport.'
@@ -95,13 +96,24 @@ router.get('/received', async (req, res) => {
       [userId, userEmail]
     );
     
-    // Ajouter les travaux supplémentaires pour chaque rapport
-    for (const share of shares) {
-      const extraWorks = await query(
-        'SELECT * FROM extra_works WHERE report_id = ?',
-        [share.id]
+    // Optimisé: charger tous les travaux supplémentaires en une seule requête (évite N+1)
+    if (shares.length > 0) {
+      const reportIds = shares.map((share) => share.id);
+      const placeholders = reportIds.map(() => '?').join(',');
+      const allExtraWorks = await query(
+        `SELECT * FROM extra_works WHERE report_id IN (${placeholders})`,
+        reportIds
       );
-      share.extraWorks = extraWorks;
+
+      const extraWorksByReport = allExtraWorks.reduce((acc, work) => {
+        if (!acc[work.reportId]) acc[work.reportId] = [];
+        acc[work.reportId].push(work);
+        return acc;
+      }, {});
+
+      for (const share of shares) {
+        share.extraWorks = extraWorksByReport[share.id] || [];
+      }
     }
     
     res.json({
@@ -110,7 +122,7 @@ router.get('/received', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Get shared reports error:', error);
+    logRouteError(req, 'Get shared reports error', error, { statusCode: 500 });
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la récupération des rapports partagés.'
@@ -142,7 +154,7 @@ router.get('/sent', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Get sent shares error:', error);
+    logRouteError(req, 'Get sent shares error', error, { statusCode: 500 });
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la récupération des partages.'
@@ -176,7 +188,7 @@ router.delete('/:id', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Delete share error:', error);
+    logRouteError(req, 'Delete share error', error, { statusCode: 500, shareId: req.params.id });
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la révocation du partage.'
@@ -216,7 +228,7 @@ router.put('/:id/accept', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Accept share error:', error);
+    logRouteError(req, 'Accept share error', error, { statusCode: 500, shareId: req.params.id });
     res.status(500).json({
       success: false,
       message: 'Erreur lors de l\'acceptation du partage.'

@@ -5,6 +5,7 @@ import express from 'express';
 import { authMiddleware } from '../middleware/auth.js';
 import { aiLimiter } from '../middleware/rateLimit.js';
 import { validateAnalyzeImage, validateCompareImages } from '../middleware/validation.js';
+import { logRouteError } from '../services/logger.js';
 
 const router = express.Router();
 
@@ -103,7 +104,11 @@ Priorités: high=danger immédiat, medium=à traiter, low=mineur`
 
         if (!geminiResponse.ok) {
             const errorData = await geminiResponse.json().catch(() => ({}));
-            console.error('[AI Route] Gemini API error:', errorData);
+            logRouteError(req, 'Gemini API error', null, {
+                statusCode: geminiResponse.status,
+                provider: 'gemini',
+                providerError: errorData,
+            });
             
             // Gérer les erreurs spécifiques
             if (geminiResponse.status === 429) {
@@ -181,11 +186,10 @@ Priorités: high=danger immédiat, medium=à traiter, low=mineur`
         });
 
     } catch (error) {
-        console.error('[AI Route] Error:', error);
+        logRouteError(req, 'AI analyze error', error, { statusCode: 500, provider: 'gemini' });
         res.status(500).json({
             success: false,
             message: 'Internal server error during AI analysis',
-            error: error.message,
         });
     }
 });
@@ -200,12 +204,29 @@ router.post('/compare', authMiddleware, aiLimiter, validateCompareImages, async 
             });
         }
 
-        const { beforeBase64, afterBase64, mimeType = 'image/jpeg', language = 'fr' } = req.body;
+        const {
+            beforeImageBase64: beforeImageBase64Input,
+            afterImageBase64: afterImageBase64Input,
+            beforeBase64,
+            afterBase64,
+            mimeType = 'image/jpeg',
+            language = 'fr',
+        } = req.body;
+        const beforeImageBase64 = beforeImageBase64Input || beforeBase64;
+        const afterImageBase64 = afterImageBase64Input || afterBase64;
 
-        if (!beforeBase64 || !afterBase64) {
+        if (!beforeImageBase64 || !afterImageBase64) {
             return res.status(400).json({
                 success: false,
                 message: 'Both before and after images are required',
+            });
+        }
+
+        // Limiter la taille des images (10MB max base64 chacune)
+        if (beforeImageBase64.length > 14 * 1024 * 1024 || afterImageBase64.length > 14 * 1024 * 1024) {
+            return res.status(413).json({
+                success: false,
+                message: 'Image too large (max 10MB per image)',
             });
         }
 
@@ -228,13 +249,13 @@ router.post('/compare', authMiddleware, aiLimiter, validateCompareImages, async 
                                 {
                                     inline_data: {
                                         mime_type: mimeType,
-                                        data: beforeBase64,
+                                        data: beforeImageBase64,
                                     },
                                 },
                                 {
                                     inline_data: {
                                         mime_type: mimeType,
-                                        data: afterBase64,
+                                        data: afterImageBase64,
                                     },
                                 },
                             ],
@@ -271,7 +292,7 @@ router.post('/compare', authMiddleware, aiLimiter, validateCompareImages, async 
         });
 
     } catch (error) {
-        console.error('[AI Route] Compare error:', error);
+        logRouteError(req, 'AI compare error', error, { statusCode: 500, provider: 'gemini' });
         res.status(500).json({
             success: false,
             message: 'Failed to compare images',

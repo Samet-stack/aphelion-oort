@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 import { get, run } from '../database.js';
 import { v4 as uuidv4 } from 'uuid';
+import { logger, serializeError } from './logger.js';
 
 // Configuration SMTP (à mettre dans .env en production)
 const SMTP_CONFIG = {
@@ -20,11 +21,12 @@ const transporter = nodemailer.createTransport(SMTP_CONFIG);
 export const verifyEmailConfig = async () => {
   try {
     await transporter.verify();
-    console.log('✅ Configuration email SMTP OK');
+    logger.info('SMTP configuration verified');
     return true;
   } catch (err) {
-    console.log('⚠️  Configuration email non disponible (mode développement)');
-    console.log('   Pour activer les emails, configurez SMTP_HOST, SMTP_USER, SMTP_PASS');
+    logger.warn('SMTP configuration unavailable, running in preview mode', {
+      reason: err?.message,
+    });
     return false;
   }
 };
@@ -133,23 +135,25 @@ export const sendVerificationEmail = async (email, token, firstName = '') => {
   try {
     // Si pas de config SMTP, on logue dans la console (mode dev)
     if (!process.env.SMTP_USER) {
-      console.log('');
-      console.log('📧 EMAIL DE VÉRIFICATION (Mode développement)');
-      console.log('═══════════════════════════════════════════════════');
-      console.log(`À: ${email}`);
-      console.log(`Sujet: ${mailOptions.subject}`);
-      console.log('');
-      console.log(`Lien de vérification: ${verificationUrl}`);
-      console.log('═══════════════════════════════════════════════════');
-      console.log('');
+      logger.info('Verification email preview generated (dev mode)', {
+        to: email,
+        subject: mailOptions.subject,
+        verificationUrl,
+      });
       return { success: true, preview: true };
     }
 
     const info = await transporter.sendMail(mailOptions);
-    console.log(`✅ Email envoyé à ${email}: ${info.messageId}`);
+    logger.info('Verification email sent', {
+      to: email,
+      messageId: info.messageId,
+    });
     return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error('❌ Erreur envoi email:', error);
+    logger.error('Failed to send verification email', {
+      to: email,
+      error: serializeError(error),
+    });
     return { success: false, error: error.message };
   }
 };
@@ -183,7 +187,7 @@ export const sendWelcomeEmail = async (email, firstName = '') => {
 
   try {
     if (!process.env.SMTP_USER) {
-      console.log(`📧 Email de bienvenue prêt pour ${email} (mode dev)`);
+      logger.info('Welcome email preview generated (dev mode)', { to: email });
       return { success: true, preview: true };
     }
 
@@ -195,7 +199,10 @@ export const sendWelcomeEmail = async (email, firstName = '') => {
     });
     return { success: true };
   } catch (error) {
-    console.error('Erreur email bienvenue:', error);
+    logger.error('Failed to send welcome email', {
+      to: email,
+      error: serializeError(error),
+    });
     return { success: false };
   }
 };

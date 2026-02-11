@@ -51,7 +51,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
     return (
       <div className="view">
         <div className="view__top">
-          <button onClick={onBack} className="link-btn">
+          <button type="button" onClick={onBack} className="link-btn">
             <ArrowLeft size={16} /> Retour
           </button>
         </div>
@@ -66,7 +66,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
   return (
     <div className="view">
       <div className="view__top">
-        <button onClick={onBack} className="link-btn">
+        <button type="button" onClick={onBack} className="link-btn">
           <ArrowLeft size={16} /> Retour
         </button>
         <div className="stepper">
@@ -84,7 +84,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
               Vous devez d'abord choisir un chantier pour créer un rapport
             </p>
           </div>
-          <button className="btn btn--ghost" onClick={onManagePlans}>
+          <button type="button" className="btn btn--ghost" onClick={onManagePlans}>
             <Plus size={16} />
             Gérer les plans
           </button>
@@ -103,7 +103,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
             <p className="text-sm text-muted mb-6">
               Vous devez d'abord créer un plan de chantier avant de pouvoir faire un rapport
             </p>
-            <button className="btn btn--primary" onClick={onManagePlans}>
+            <button type="button" className="btn btn--primary" onClick={onManagePlans}>
               <Plus size={18} />
               Créer un nouveau chantier
             </button>
@@ -141,7 +141,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
 
         {plans.length > 0 && (
           <div className="mt-6 pt-6 border-t border-white/10">
-            <button className="btn btn--ghost w-full" onClick={onManagePlans}>
+            <button type="button" className="btn btn--ghost w-full" onClick={onManagePlans}>
               <Plus size={16} />
               Créer un nouveau chantier
             </button>

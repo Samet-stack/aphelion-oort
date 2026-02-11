@@ -689,35 +689,24 @@ export const generatePlanPDFPremium = async (plan: ApiPlan): Promise<{ blob: Blo
 
               const boxRatio = photoW / photoH;
 
-            // Draw the image as "cover" (cropped) so portrait screenshots don't become tiny.
-            let dw = photoW;
-            let dh = photoH;
-            let px = ctx.margin + 6;
-            let py = innerY;
+              // Draw image as "contain" to guarantee it never overflows the card in PDF viewers.
+              // For very tall screenshots we keep readability via the full-width annex page.
+              let dw = photoW;
+              let dh = photoH;
+              let px = ctx.margin + 6;
+              let py = innerY;
 
-            if (ratio > boxRatio) {
-              // Wider image: fit height, crop left/right.
-              dh = photoH;
-              dw = dh * ratio;
-              px = ctx.margin + 6 - (dw - photoW) / 2;
-              py = innerY;
-            } else {
-              // Taller image: fit width, crop top/bottom.
-              dw = photoW;
-              dh = dw / ratio;
-              px = ctx.margin + 6;
-              py = innerY - (dh - photoH) / 2;
-            }
+              if (ratio > boxRatio) {
+                dw = photoW;
+                dh = dw / ratio;
+                py = innerY + (photoH - dh) / 2;
+              } else {
+                dh = photoH;
+                dw = dh * ratio;
+                px = ctx.margin + 6 + (photoW - dw) / 2;
+              }
 
-            doc.saveGraphicsState();
-            try {
-              // Clip to the photo box (avoid overflow when we crop via "cover").
-              doc.roundedRect(ctx.margin + 6, innerY, photoW, photoH, 2, 2, null);
-              doc.clip();
               doc.addImage(point.photoDataUrl, format, px, py, dw, dh);
-            } finally {
-              doc.restoreGraphicsState();
-            }
             }
           } catch {
             // Ignore photo rendering errors; we keep PDF export working.
