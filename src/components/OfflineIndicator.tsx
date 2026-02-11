@@ -1,6 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { Wifi, WifiOff, Cloud, RefreshCw } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, Cloud, RefreshCw, Wifi, WifiOff } from 'lucide-react';
 import { offlineService, type OfflineState } from '../services/offline';
+
+const formatRetryLabel = (nextRetryAt: string | null): string => {
+  if (!nextRetryAt) return 'Aucune relance planifiée';
+  const timestamp = Date.parse(nextRetryAt);
+  if (!Number.isFinite(timestamp)) return 'Relance à venir';
+  const diffMs = timestamp - Date.now();
+  if (diffMs <= 0) return 'Relance imminente';
+  const minutes = Math.ceil(diffMs / 60_000);
+  if (minutes < 60) return `Relance dans ${minutes} min`;
+  const hours = Math.ceil(minutes / 60);
+  return `Relance dans ${hours} h`;
+};
 
 export const OfflineIndicator: React.FC = () => {
   const [state, setState] = useState<OfflineState>(offlineService.getState());
@@ -8,78 +20,82 @@ export const OfflineIndicator: React.FC = () => {
   const [lastSyncResult, setLastSyncResult] = useState<{ success: number; failed: number } | null>(null);
 
   useEffect(() => {
-    const unsubscribe = offlineService.subscribe((newState) => {
-      setState(newState);
+    const unsubscribe = offlineService.subscribe((nextState) => {
+      setState(nextState);
     });
     return unsubscribe;
   }, []);
 
-  // Cleanup du timeout
   useEffect(() => {
-    let timeoutId: number | null = null;
-    
-    if (lastSyncResult) {
-      timeoutId = window.setTimeout(() => setLastSyncResult(null), 3000);
-    }
-    
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-    };
+    if (!lastSyncResult) return undefined;
+    const timeoutId = window.setTimeout(() => setLastSyncResult(null), 3500);
+    return () => clearTimeout(timeoutId);
   }, [lastSyncResult]);
+
+  const nextRetryLabel = useMemo(() => formatRetryLabel(state.nextRetryAt), [state.nextRetryAt]);
 
   const handleForceSync = async () => {
     const result = await offlineService.forceSync();
     setLastSyncResult(result);
   };
 
-  // Si tout va bien (online et rien en attente), on affiche juste une petite icône discrète
   if (state.isOnline && state.pendingCount === 0 && !state.isSyncing) {
     return (
       <div className="fixed bottom-4 left-4 z-50">
         <div className="flex items-center gap-2 px-3 py-1.5 bg-[#111827]/80 border border-white/10 rounded-full text-xs text-[#7cfc8a]">
-          <Cloud size={14} />
+          <Cloud size={14} aria-hidden="true" />
           <span>Synchronisé</span>
         </div>
       </div>
     );
   }
 
-  // Mode hors-ligne
   if (!state.isOnline) {
     return (
       <div className="fixed bottom-4 left-4 z-50">
-        <div 
-          className="flex items-center gap-2 px-3 py-2 bg-orange-500/20 border border-orange-500/50 rounded-lg text-sm text-orange-400 cursor-pointer"
-          onClick={() => setShowDetails(!showDetails)}
+        <button
+          type="button"
+          className="flex items-center gap-2 px-3 py-2 bg-orange-500/20 border border-orange-500/50 rounded-lg text-sm text-orange-400 cursor-pointer pressable"
+          onClick={() => setShowDetails((prev) => !prev)}
+          aria-expanded={showDetails}
+          aria-controls="offline-details"
         >
-          <WifiOff size={16} />
+          <WifiOff size={16} aria-hidden="true" />
           <span className="font-medium">Hors-ligne</span>
           {state.pendingCount > 0 && (
             <span className="ml-1 px-1.5 py-0.5 bg-orange-500 text-white text-xs rounded-full">
               {state.pendingCount}
             </span>
           )}
-        </div>
-        
+        </button>
+
         {showDetails && (
-          <div className="absolute bottom-full left-0 mb-2 w-64 p-4 bg-[#111827] border border-white/20 rounded-xl shadow-xl">
+          <div
+            id="offline-details"
+            className="absolute bottom-full left-0 mb-2 w-72 p-4 bg-[#111827] border border-white/20 rounded-xl shadow-xl"
+          >
             <p className="text-sm text-white mb-2">
               <WifiOff size={14} className="inline mr-1" />
               Pas de connexion Internet
             </p>
             {state.pendingCount > 0 ? (
               <>
-                <p className="text-sm text-[#94a3b8] mb-3">
-                  {state.pendingCount} rapport{state.pendingCount > 1 ? 's' : ''} en attente de synchronisation
+                <p className="text-sm text-[#94a3b8] mb-2">
+                  {state.pendingCount} rapport{state.pendingCount > 1 ? 's' : ''} en file d’attente
                 </p>
-                <p className="text-xs text-[#7cfc8a]">
-                  ✅ Les rapports seront envoyés automatiquement quand le réseau reviendra
+                <p className="text-xs text-[#7cfc8a] mb-2">
+                  Les envois reprendront automatiquement dès le retour du réseau.
                 </p>
+                <ul className="text-xs text-[#cbd5e1] space-y-1">
+                  {state.queuePreview.map((item) => (
+                    <li key={item.localId} className="truncate">
+                      {item.localId.slice(0, 12)} • {item.syncStatus}
+                    </li>
+                  ))}
+                </ul>
               </>
             ) : (
-              <p className="text-sm text-[#94a3b8]">
-                Aucun rapport en attente
-              </p>
+              <p className="text-sm text-[#94a3b8]">Aucun rapport en attente</p>
             )}
           </div>
         )}
@@ -87,44 +103,53 @@ export const OfflineIndicator: React.FC = () => {
     );
   }
 
-  // En ligne mais avec rapports en attente
   if (state.isOnline && state.pendingCount > 0) {
     return (
       <div className="fixed bottom-4 left-4 z-50">
-        <div 
-          className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm cursor-pointer transition-all ${
-            state.isSyncing 
-              ? 'bg-[#ffb703]/20 border border-[#ffb703]/50 text-[#ffb703]' 
+        <button
+          type="button"
+          className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm cursor-pointer transition-all pressable ${
+            state.isSyncing
+              ? 'bg-[#ffb703]/20 border border-[#ffb703]/50 text-[#ffb703]'
               : 'bg-[#4dd0e1]/20 border border-[#4dd0e1]/50 text-[#4dd0e1]'
           }`}
-          onClick={() => !state.isSyncing && handleForceSync()}
+          onClick={() => {
+            if (!state.isSyncing) void handleForceSync();
+          }}
+          aria-live="polite"
         >
           {state.isSyncing ? (
-            <RefreshCw size={16} className="animate-spin" />
+            <RefreshCw size={16} className="animate-spin" aria-hidden="true" />
           ) : (
-            <Wifi size={16} />
+            <Wifi size={16} aria-hidden="true" />
           )}
           <span className="font-medium">
             {state.isSyncing ? 'Synchronisation...' : `${state.pendingCount} en attente`}
           </span>
-          {!state.isSyncing && <RefreshCw size={14} className="ml-1" />}
-        </div>
+          {!state.isSyncing && <RefreshCw size={14} className="ml-1" aria-hidden="true" />}
+        </button>
 
-        {lastSyncResult && (
-          <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-[#111827] border border-[#7cfc8a]/30 rounded-lg text-xs">
-            {lastSyncResult.success > 0 && (
-              <span className="text-[#7cfc8a]">✓ {lastSyncResult.success} synchronisé</span>
-            )}
-            {lastSyncResult.failed > 0 && (
-              <span className="text-[#ff6b6b] ml-2">✗ {lastSyncResult.failed} échec</span>
-            )}
-          </div>
-        )}
+        <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-[#111827] border border-white/20 rounded-lg text-xs min-w-[220px]">
+          <p className="text-[#94a3b8] mb-1">{nextRetryLabel}</p>
+          {state.failedCount > 0 && (
+            <p className="text-[#ff6b6b] mb-1">
+              <AlertTriangle size={12} className="inline mr-1" />
+              {state.failedCount} échec(s) définitif(s)
+            </p>
+          )}
+          {state.retryScheduledCount > 0 && (
+            <p className="text-[#ffb703]">{state.retryScheduledCount} en relance différée</p>
+          )}
+          {lastSyncResult && (
+            <p className="mt-1 text-[#7cfc8a]" aria-live="assertive">
+              ✓ {lastSyncResult.success} ok • ✗ {lastSyncResult.failed} échec
+            </p>
+          )}
+        </div>
       </div>
     );
   }
 
-  // Synchronisation en cours (aucun en attente)
   if (state.isSyncing) {
     return (
       <div className="fixed bottom-4 left-4 z-50">
@@ -139,33 +164,45 @@ export const OfflineIndicator: React.FC = () => {
   return null;
 };
 
-// Composant plus discret pour le header
 export const OfflineStatusDot: React.FC = () => {
   const [isOnline, setIsOnline] = useState(offlineService.isOnline());
   const [pendingCount, setPendingCount] = useState(0);
+  const [failedCount, setFailedCount] = useState(0);
 
   useEffect(() => {
     const unsubscribe = offlineService.subscribe((state) => {
       setIsOnline(state.isOnline);
       setPendingCount(state.pendingCount);
+      setFailedCount(state.failedCount);
     });
     return unsubscribe;
   }, []);
 
+  const statusLabel = !isOnline
+    ? 'Hors-ligne'
+    : failedCount > 0
+      ? `${failedCount} échec(s) de synchro`
+      : pendingCount > 0
+        ? `${pendingCount} en attente de synchro`
+        : 'Synchronisé';
+
   return (
-    <div className="flex items-center gap-2">
-      <span 
+    <div className="flex items-center gap-2" aria-label={statusLabel}>
+      <span
         className={`w-2 h-2 rounded-full ${
-          isOnline 
-            ? pendingCount > 0 ? 'bg-[#ffb703] animate-pulse' : 'bg-[#7cfc8a]' 
-            : 'bg-[#ff6b6b]'
-        }`} 
-        title={isOnline ? (pendingCount > 0 ? `${pendingCount} en attente` : 'En ligne') : 'Hors-ligne'}
+          !isOnline
+            ? 'bg-[#ff6b6b]'
+            : failedCount > 0
+              ? 'bg-[#ff6b6b] animate-pulse'
+              : pendingCount > 0
+                ? 'bg-[#ffb703] animate-pulse'
+                : 'bg-[#7cfc8a]'
+        }`}
+        title={statusLabel}
       />
-      {!isOnline && (
-        <span className="text-xs text-[#ff6b6b]">Hors-ligne</span>
-      )}
-      {isOnline && pendingCount > 0 && (
+      {!isOnline && <span className="text-xs text-[#ff6b6b]">Hors-ligne</span>}
+      {isOnline && failedCount > 0 && <span className="text-xs text-[#ff6b6b]">{failedCount} erreur(s)</span>}
+      {isOnline && failedCount === 0 && pendingCount > 0 && (
         <span className="text-xs text-[#ffb703]">{pendingCount} en attente</span>
       )}
     </div>

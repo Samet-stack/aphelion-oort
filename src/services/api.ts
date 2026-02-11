@@ -59,6 +59,18 @@ export interface ApiReport {
   }>;
 }
 
+export interface ApiExtraWorkInput {
+  description: string;
+  estimatedCost: number;
+  urgency: 'low' | 'medium' | 'high';
+  category: string;
+}
+
+export interface ApiReportCreateInput
+  extends Omit<ApiReport, 'id' | 'createdAt' | 'extraWorks'> {
+  extraWorks?: ApiExtraWorkInput[];
+}
+
 // Token storage
 const getToken = () => localStorage.getItem('siteflow_token');
 const setToken = (token: string) => localStorage.setItem('siteflow_token', token);
@@ -94,10 +106,14 @@ const fetchWithAuth = async (
       headers
     });
   } catch {
+    const apiTarget =
+      API_URL.startsWith('/') && typeof window !== 'undefined'
+        ? `${window.location.origin}${API_URL}`
+        : API_URL;
     throw createApiError(0, {
       success: false,
       message:
-        "Impossible de contacter le serveur. Vérifiez que l'API est en ligne (localhost:3001) ou que VITE_API_URL est correct.",
+        `Impossible de contacter le serveur API (${apiTarget}). Vérifiez que l'API est en ligne.`,
     });
   }
 
@@ -160,17 +176,6 @@ export const authApi = {
     }
   },
   
-  resendVerification: async (email: string) => {
-    const response = await fetchWithAuth('/auth/resend-verification', {
-      method: 'POST',
-      body: JSON.stringify({ email })
-    });
-    if (!response.success) {
-      throw new Error(response.message || 'Erreur');
-    }
-    return response.data;
-  },
-  
   logout: () => {
     removeToken();
   },
@@ -225,7 +230,7 @@ export const reportsApi = {
     throw new Error('Rapport non trouvé');
   },
   
-  create: async (reportData: Omit<ApiReport, 'id' | 'createdAt' | 'extraWorks'> & { extraWorks?: any[] }): Promise<ApiReport> => {
+  create: async (reportData: ApiReportCreateInput): Promise<ApiReport> => {
     const response = await fetchWithAuth('/reports', {
       method: 'POST',
       body: JSON.stringify(reportData)

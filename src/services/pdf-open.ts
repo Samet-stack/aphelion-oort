@@ -3,9 +3,11 @@ export type PendingPdfTab = Window | null;
 export type MobilePdfRequest = {
   blobUrl: string;
   filename: string;
+  requestId?: string;
 };
 
 const MOBILE_PDF_EVENT = 'siteflow:mobile-pdf-request';
+const MOBILE_PDF_ACK_EVENT = 'siteflow:mobile-pdf-ack';
 
 const isBrowser = () => typeof window !== 'undefined';
 
@@ -34,6 +36,12 @@ export const onMobilePdfRequested = (
   const listener = (event: Event) => {
     const custom = event as CustomEvent<MobilePdfRequest>;
     if (!custom.detail) return;
+    if (custom.detail.requestId) {
+      const ackEvent = new CustomEvent<{ requestId: string }>(MOBILE_PDF_ACK_EVENT, {
+        detail: { requestId: custom.detail.requestId },
+      });
+      window.dispatchEvent(ackEvent);
+    }
     handler(custom.detail);
   };
 
@@ -110,6 +118,32 @@ const emitMobilePdfRequest = (payload: MobilePdfRequest) => {
   window.dispatchEvent(event);
 };
 
+const waitForMobilePdfAck = (requestId: string, timeoutMs = 450): Promise<boolean> => {
+  if (!isBrowser()) return Promise.resolve(false);
+
+  return new Promise((resolve) => {
+    let finished = false;
+    const timeout = window.setTimeout(() => {
+      if (finished) return;
+      finished = true;
+      window.removeEventListener(MOBILE_PDF_ACK_EVENT, onAck as EventListener);
+      resolve(false);
+    }, timeoutMs);
+
+    const onAck = (event: Event) => {
+      const custom = event as CustomEvent<{ requestId?: string }>;
+      if (custom.detail?.requestId !== requestId) return;
+      if (finished) return;
+      finished = true;
+      window.clearTimeout(timeout);
+      window.removeEventListener(MOBILE_PDF_ACK_EVENT, onAck as EventListener);
+      resolve(true);
+    };
+
+    window.addEventListener(MOBILE_PDF_ACK_EVENT, onAck as EventListener);
+  });
+};
+
 export const presentPdfBlob = ({
   blob,
   filename,
@@ -130,7 +164,25 @@ export const presentPdfBlob = ({
     closePendingPdfTab(pendingTab);
 
     if (mobilePdfListenerCount > 0) {
-      emitMobilePdfRequest({ blobUrl, filename });
+      const requestId = `pdf-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      emitMobilePdfRequest({ blobUrl, filename, requestId });
+
+      // If no ACK is received quickly (listener not mounted / stale app shell),
+      // fallback to direct browser open so users are never blocked.
+      waitForMobilePdfAck(requestId).then((acked) => {
+        if (acked) return;
+        let fallbackOpened = false;
+        try {
+          window.location.assign(blobUrl);
+          fallbackOpened = true;
+        } catch {
+          // ignore
+        }
+        if (!fallbackOpened) {
+          triggerDownloadAnchor(blobUrl, filename);
+        }
+      });
+
       // Safety cleanup in case the mobile viewer is never closed.
       setTimeout(() => revokePdfUrl(blobUrl), 3600000);
       return;

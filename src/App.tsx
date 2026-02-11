@@ -1,25 +1,41 @@
-import { useCallback, useEffect, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { Layout } from './components/Layout';
-import { Hero } from './components/Hero';
-import { CameraView } from './components/CameraView';
-import { ReportView } from './components/ReportView';
-import { HistoryView } from './components/HistoryView';
-import { PlanView } from './components/PlanView';
-import { Login } from './components/Login';
-import { Register } from './components/Register';
-import { VerifyEmail } from './components/VerifyEmail';
-import { RegisterSuccess } from './components/RegisterSuccess';
 import { PageTransition } from './components/PageTransition';
-import { MobilePdfView } from './components/MobilePdfView';
-import { ApiPlan, ApiPlanPoint } from './services/api';
+import type { ApiPlan, ApiPlanPoint } from './services/api';
 import { MobilePdfRequest, onMobilePdfRequested, revokePdfUrl } from './services/pdf-open';
 
 
 type ViewState = 'LANDING' | 'PLANS' | 'CAMERA' | 'REPORT' | 'HISTORY' | 'PDF_VIEWER';
+
+const Hero = lazy(() => import('./components/Hero').then((m) => ({ default: m.Hero })));
+const CameraView = lazy(() => import('./components/CameraView').then((m) => ({ default: m.CameraView })));
+const ReportView = lazy(() => import('./components/ReportView').then((m) => ({ default: m.ReportView })));
+const HistoryView = lazy(() => import('./components/HistoryView').then((m) => ({ default: m.HistoryView })));
+const PlanView = lazy(() => import('./components/PlanView').then((m) => ({ default: m.PlanView })));
+const Login = lazy(() => import('./components/Login').then((m) => ({ default: m.Login })));
+const Register = lazy(() => import('./components/Register').then((m) => ({ default: m.Register })));
+const RegisterSuccess = lazy(() =>
+  import('./components/RegisterSuccess').then((m) => ({ default: m.RegisterSuccess })),
+);
+const MobilePdfView = lazy(() =>
+  import('./components/MobilePdfView').then((m) => ({ default: m.MobilePdfView })),
+);
+
+function AppScreenFallback() {
+  return (
+    <div className="view view--centered">
+      <div className="card surface-glass" style={{ width: 'min(420px, 100%)' }}>
+        <div className="skeleton" style={{ height: 22, width: '56%', marginBottom: 12 }} />
+        <div className="skeleton" style={{ height: 12, width: '88%', marginBottom: 8 }} />
+        <div className="skeleton" style={{ height: 12, width: '72%' }} />
+      </div>
+    </div>
+  );
+}
 
 // Composant principal protégé par auth
 function AppContent() {
@@ -85,11 +101,15 @@ function AppContent() {
   if (!isAuthenticated) {
     return authMode === 'login' ? (
       <PageTransition key="login">
-        <Login onSwitchToRegister={() => setAuthMode('register')} />
+        <Suspense fallback={<AppScreenFallback />}>
+          <Login onSwitchToRegister={() => setAuthMode('register')} />
+        </Suspense>
       </PageTransition>
     ) : (
       <PageTransition key="register">
-        <Register onSwitchToLogin={() => setAuthMode('login')} />
+        <Suspense fallback={<AppScreenFallback />}>
+          <Register onSwitchToLogin={() => setAuthMode('login')} />
+        </Suspense>
       </PageTransition>
     );
   }
@@ -164,73 +184,85 @@ function AppContent() {
       <AnimatePresence mode="wait">
         {view === 'LANDING' && (
           <PageTransition key="landing">
-            <Hero onStart={handleStart} onHistory={handleHistory} />
+            <Suspense fallback={<AppScreenFallback />}>
+              <Hero onStart={handleStart} onHistory={handleHistory} />
+            </Suspense>
           </PageTransition>
         )}
 
         {view === 'PLANS' && (
           <PageTransition key="plans">
-            <PlanView
-              onBack={handleReset}
-              onCreateReportFromPoint={handleCreateReportFromPoint}
-              onStartReportFromPlan={handleStartReportFromPlan}
-              initialPlanId={planViewInitialPlanId}
-              initialPointId={planViewInitialPointId}
-            />
+            <Suspense fallback={<AppScreenFallback />}>
+              <PlanView
+                onBack={handleReset}
+                onCreateReportFromPoint={handleCreateReportFromPoint}
+                onStartReportFromPlan={handleStartReportFromPlan}
+                initialPlanId={planViewInitialPlanId}
+                initialPointId={planViewInitialPointId}
+              />
+            </Suspense>
           </PageTransition>
         )}
 
         {view === 'CAMERA' && selectedPlan && (
           <PageTransition key="camera">
-            <CameraView
-              onCapture={handleCapture}
-              onBack={() => handleBackToPlan()}
-              selectedPlan={selectedPlan}
-            />
+            <Suspense fallback={<AppScreenFallback />}>
+              <CameraView
+                onCapture={handleCapture}
+                onBack={() => handleBackToPlan()}
+                selectedPlan={selectedPlan}
+              />
+            </Suspense>
           </PageTransition>
         )}
 
         {view === 'REPORT' && capturedImage && selectedPlan && (
           <PageTransition key="report">
-            <ReportView
-              imageFile={capturedImage}
-              selectedPlan={selectedPlan}
-              selectedPoint={selectedPoint}
-              onBack={() => {
-                setCapturedImage(null);
-                if (selectedPoint) {
-                  handleBackToPlan({ focusPointId: selectedPoint.id });
-                  return;
-                }
-                setView('CAMERA');
-              }}
-              onReset={() => {
-                setCapturedImage(null);
-                if (selectedPoint) {
-                  handleBackToPlan({ focusPointId: selectedPoint.id });
-                  return;
-                }
-                setView('CAMERA');
-              }}
-            />
+            <Suspense fallback={<AppScreenFallback />}>
+              <ReportView
+                imageFile={capturedImage}
+                selectedPlan={selectedPlan}
+                selectedPoint={selectedPoint}
+                onBack={() => {
+                  setCapturedImage(null);
+                  if (selectedPoint) {
+                    handleBackToPlan({ focusPointId: selectedPoint.id });
+                    return;
+                  }
+                  setView('CAMERA');
+                }}
+                onReset={() => {
+                  setCapturedImage(null);
+                  if (selectedPoint) {
+                    handleBackToPlan({ focusPointId: selectedPoint.id });
+                    return;
+                  }
+                  setView('CAMERA');
+                }}
+              />
+            </Suspense>
           </PageTransition>
         )}
 
         {view === 'HISTORY' && (
           <PageTransition key="history">
-            <HistoryView
-              onBack={handleReset}
-            />
+            <Suspense fallback={<AppScreenFallback />}>
+              <HistoryView
+                onBack={handleReset}
+              />
+            </Suspense>
           </PageTransition>
         )}
 
         {view === 'PDF_VIEWER' && mobilePdf && (
           <PageTransition key="pdf-viewer">
-            <MobilePdfView
-              blobUrl={mobilePdf.blobUrl}
-              filename={mobilePdf.filename}
-              onBack={closeMobilePdf}
-            />
+            <Suspense fallback={<AppScreenFallback />}>
+              <MobilePdfView
+                blobUrl={mobilePdf.blobUrl}
+                filename={mobilePdf.filename}
+                onBack={closeMobilePdf}
+              />
+            </Suspense>
           </PageTransition>
         )}
       </AnimatePresence>
@@ -246,8 +278,15 @@ function App() {
         <Routes>
           <Route path="/" element={<AppContent />} />
           <Route path="/login" element={<AppContent />} />
-          <Route path="/register-success" element={<RegisterSuccess />} />
-          <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route
+            path="/register-success"
+            element={(
+              <Suspense fallback={<AppScreenFallback />}>
+                <RegisterSuccess />
+              </Suspense>
+            )}
+          />
+          <Route path="/verify-email" element={<Navigate to="/login" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </ToastProvider>

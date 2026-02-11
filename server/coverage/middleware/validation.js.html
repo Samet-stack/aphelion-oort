@@ -23,16 +23,16 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">98.66% </span>
+                <span class="strong">98.83% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>148/150</span>
+                <span class='fraction'>169/171</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">57.14% </span>
+                <span class="strong">75% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>4/7</span>
+                <span class='fraction'>9/12</span>
             </div>
         
             
@@ -44,9 +44,9 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">98.66% </span>
+                <span class="strong">98.83% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>148/150</span>
+                <span class='fraction'>169/171</span>
             </div>
         
             
@@ -231,7 +231,28 @@
 <a name='L166'></a><a href='#L166'>166</a>
 <a name='L167'></a><a href='#L167'>167</a>
 <a name='L168'></a><a href='#L168'>168</a>
-<a name='L169'></a><a href='#L169'>169</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
+<a name='L169'></a><a href='#L169'>169</a>
+<a name='L170'></a><a href='#L170'>170</a>
+<a name='L171'></a><a href='#L171'>171</a>
+<a name='L172'></a><a href='#L172'>172</a>
+<a name='L173'></a><a href='#L173'>173</a>
+<a name='L174'></a><a href='#L174'>174</a>
+<a name='L175'></a><a href='#L175'>175</a>
+<a name='L176'></a><a href='#L176'>176</a>
+<a name='L177'></a><a href='#L177'>177</a>
+<a name='L178'></a><a href='#L178'>178</a>
+<a name='L179'></a><a href='#L179'>179</a>
+<a name='L180'></a><a href='#L180'>180</a>
+<a name='L181'></a><a href='#L181'>181</a>
+<a name='L182'></a><a href='#L182'>182</a>
+<a name='L183'></a><a href='#L183'>183</a>
+<a name='L184'></a><a href='#L184'>184</a>
+<a name='L185'></a><a href='#L185'>185</a>
+<a name='L186'></a><a href='#L186'>186</a>
+<a name='L187'></a><a href='#L187'>187</a>
+<a name='L188'></a><a href='#L188'>188</a>
+<a name='L189'></a><a href='#L189'>189</a>
+<a name='L190'></a><a href='#L190'>190</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
@@ -378,6 +399,27 @@
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
@@ -482,7 +524,7 @@ export const updatePlanSchema = z.object({
 // Point schemas
 export const pointStatusEnum = z.enum(['a_faire', 'en_cours', 'termine']);
 export const pointCategoryEnum = z.enum([
-  'radiateur', 'electricite', 'defaut', 'validation', 
+  'radiateur', 'electricite', 'defaut', 'validation',
   'plomberie', 'maconnerie', 'menuiserie', 'autre'
 ]);
 &nbsp;
@@ -546,12 +588,33 @@ export const analyzeImageSchema = z.object({
   language: z.enum(['fr', 'en']).default('fr'),
 });
 &nbsp;
-export const compareImagesSchema = z.object({
-  beforeImageBase64: z.string().min(1, 'Image avant requise'),
-  afterImageBase64: z.string().min(1, 'Image après requise'),
-  mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']).default('image/jpeg'),
-  language: z.enum(['fr', 'en']).default('fr'),
-});
+export const compareImagesSchema = z
+  .object({
+    // Nouveau contrat
+    beforeImageBase64: z.string().min(1, 'Image avant requise').optional(),
+    afterImageBase64: z.string().min(1, 'Image après requise').optional(),
+    // Compatibilité legacy
+    beforeBase64: z.string().min(1, 'Image avant requise').optional(),
+    afterBase64: z.string().min(1, 'Image après requise').optional(),
+    mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']).default('image/jpeg'),
+    language: z.enum(['fr', 'en']).default('fr'),
+  })
+  .superRefine((data, ctx) =&gt; {
+    if (!data.beforeImageBase64 &amp;&amp; !data.beforeBase64) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['beforeImageBase64'],
+        message: 'Image avant requise',
+      });
+    }
+    if (!data.afterImageBase64 &amp;&amp; !data.afterBase64) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['afterImageBase64'],
+        message: 'Image après requise',
+      });
+    }
+  });
 &nbsp;
 // Export validation middlewares
 export const validateRegister = validate(registerSchema);
@@ -574,7 +637,7 @@ export const validateCompareImages = validate(compareImagesSchema);
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-02-11T08:48:19.654Z
+                at 2026-02-11T14:50:54.932Z
             </div>
         <script src="../prettify.js"></script>
         <script>

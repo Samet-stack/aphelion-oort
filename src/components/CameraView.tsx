@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { Camera, Upload, ArrowLeft, MapPin, Building2 } from 'lucide-react';
 import { ApiPlan } from '../services/api';
+import { optimizeImageForUpload } from '../services/image-optimize';
 
 interface CameraViewProps {
     onCapture: (file: File) => void;
@@ -11,10 +12,30 @@ interface CameraViewProps {
 export const CameraView: React.FC<CameraViewProps> = ({ onCapture, onBack, selectedPlan }) => {
     const inputRef = useRef<HTMLInputElement>(null);
     const [isDragging, setIsDragging] = useState(false);
+    const [isOptimizing, setIsOptimizing] = useState(false);
+    const [optimizationHint, setOptimizationHint] = useState<string | null>(null);
+
+    const processAndCapture = async (file: File) => {
+        setIsOptimizing(true);
+        setOptimizationHint(null);
+        try {
+            const optimizedFile = await optimizeImageForUpload(file);
+            if (optimizedFile.size < file.size) {
+                const savedPercent = Math.round((1 - optimizedFile.size / file.size) * 100);
+                setOptimizationHint(`Photo optimisée: -${savedPercent}%`);
+            }
+            onCapture(optimizedFile);
+        } catch (error) {
+            console.error('Image optimization failed, using original file', error);
+            onCapture(file);
+        } finally {
+            setIsOptimizing(false);
+        }
+    };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
-            onCapture(e.target.files[0]);
+            void processAndCapture(e.target.files[0]);
         }
     };
 
@@ -22,7 +43,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onCapture, onBack, selec
         e.preventDefault();
         setIsDragging(false);
         if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-            onCapture(e.dataTransfer.files[0]);
+            void processAndCapture(e.dataTransfer.files[0]);
         }
     };
 
@@ -91,7 +112,11 @@ export const CameraView: React.FC<CameraViewProps> = ({ onCapture, onBack, selec
                     }}
                     onDragLeave={() => setIsDragging(false)}
                     onDrop={handleDrop}
-                    onClick={() => inputRef.current?.click()}
+                    onClick={() => {
+                        if (!isOptimizing) {
+                            inputRef.current?.click();
+                        }
+                    }}
                 >
                     <div className="dropzone__icon">
                         <Camera size={28} />
@@ -100,12 +125,25 @@ export const CameraView: React.FC<CameraViewProps> = ({ onCapture, onBack, selec
                     <p className="dropzone__hint">Formats JPG, PNG. Qualite recommandee 1080p.</p>
                 </div>
 
+                {isOptimizing && <p className="hint-text">Optimisation de la photo en cours...</p>}
+                {!isOptimizing && optimizationHint && <p className="hint-text">{optimizationHint}</p>}
+
                 <div className="camera__actions">
-                    <button type="button" className="btn btn--primary" onClick={() => inputRef.current?.click()}>
+                    <button
+                        type="button"
+                        className="btn btn--primary pressable"
+                        onClick={() => inputRef.current?.click()}
+                        disabled={isOptimizing}
+                    >
                         <Camera size={18} />
-                        Ouvrir la camera
+                        {isOptimizing ? 'Optimisation...' : 'Ouvrir la camera'}
                     </button>
-                    <button type="button" className="btn btn--ghost" onClick={() => inputRef.current?.click()}>
+                    <button
+                        type="button"
+                        className="btn btn--ghost pressable"
+                        onClick={() => inputRef.current?.click()}
+                        disabled={isOptimizing}
+                    >
                         <Upload size={18} />
                         Importer un fichier
                     </button>

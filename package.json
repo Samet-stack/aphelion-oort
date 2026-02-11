@@ -4,8 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -n api,web -c green,blue \"npm --prefix server run dev\" \"vite\"",
-    "dev:web": "vite",
+    "dev": "concurrently -n api,web -c green,blue \"npm --prefix server run dev\" \"vite --host 0.0.0.0 --port 5173\"",
+    "dev:web": "vite --host 0.0.0.0 --port 5173",
     "dev:api": "npm --prefix server run dev",
     "build": "tsc && vite build",
     "lint": "eslint --no-eslintrc --config .eslintrc.cjs . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
@@ -14,6 +14,9 @@
     "test:api:coverage": "npm --prefix server run test:coverage -- --run"
   },
   "dependencies": {
+    "@hookform/resolvers": "^5.2.2",
+    "@tanstack/react-query": "^5.90.21",
+    "@tanstack/react-virtual": "^3.13.18",
     "@types/node": "^25.2.0",
     "clsx": "^2.1.1",
     "dexie": "^4.3.0",
@@ -22,8 +25,10 @@
     "lucide-react": "^0.309.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-hook-form": "^7.71.1",
     "react-router-dom": "^7.13.0",
-    "tailwind-merge": "^3.4.0"
+    "tailwind-merge": "^3.4.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",

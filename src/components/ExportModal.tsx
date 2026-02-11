@@ -1,9 +1,27 @@
-import React, { useState } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import { X, Download, FileSpreadsheet, FileText, Calendar } from 'lucide-react';
 import { exportApi } from '../services/api';
+import { Button, SurfaceCard } from './ui';
 
 interface ExportModalProps {
   onClose: () => void;
+}
+
+interface ExportRow {
+  reportId: string;
+  createdAt: string;
+  siteName?: string;
+  clientName?: string;
+  address?: string;
+  priority?: string;
+  category?: string;
+  extraWorksCount?: number;
+  totalExtraCost?: number;
+  description?: string;
+}
+
+interface ExcelExportData {
+  reports: ExportRow[];
 }
 
 export const ExportModal: React.FC<ExportModalProps> = ({ onClose }) => {
@@ -13,34 +31,20 @@ export const ExportModal: React.FC<ExportModalProps> = ({ onClose }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleExport = async () => {
-    setError('');
-    setIsLoading(true);
+  const titleId = useId();
+  const descriptionId = useId();
 
-    try {
-      const filters = {
-        startDate: startDate || undefined,
-        endDate: endDate || undefined
-      };
-
-      if (format === 'csv') {
-        await exportApi.downloadCSV(filters);
-      } else {
-        const data = await exportApi.getExcelData(filters);
-        // Convertir en CSV pour Excel avec tabulation
-        generateExcel(data);
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
       }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
 
-      onClose();
-    } catch (err: any) {
-      setError(err.message || 'Erreur lors de l\'export');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const generateExcel = (data: any) => {
-    // Créer un CSV avec séparateur tab pour Excel
+  const generateExcel = (data: ExcelExportData) => {
     const headers = [
       'ID Rapport',
       'Date',
@@ -51,7 +55,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({ onClose }) => {
       'Catégorie',
       'Nb TS',
       'Montant TS',
-      'Description'
+      'Description',
     ];
 
     const rows = [headers.join('\t')];
@@ -65,138 +69,136 @@ export const ExportModal: React.FC<ExportModalProps> = ({ onClose }) => {
         report.address || '',
         report.priority || '',
         report.category || '',
-        report.extraWorksCount,
-        report.totalExtraCost,
-        (report.description || '').substring(0, 100).replace(/\n/g, ' ')
+        report.extraWorksCount ?? 0,
+        report.totalExtraCost ?? 0,
+        (report.description || '').substring(0, 100).replace(/\n/g, ' '),
       ];
       rows.push(row.join('\t'));
     }
 
-    const csv = rows.join('\n');
-    const blob = new Blob(['\uFEFF' + csv], { type: 'application/vnd.ms-excel' });
+    const content = rows.join('\n');
+    const blob = new Blob([`\uFEFF${content}`], { type: 'application/vnd.ms-excel' });
     const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `rapports_${new Date().toISOString().split('T')[0]}.xls`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `rapports_${new Date().toISOString().split('T')[0]}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
     window.URL.revokeObjectURL(url);
   };
 
+  const handleExport = async () => {
+    setError('');
+    setIsLoading(true);
+    try {
+      const filters = {
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+      };
+      if (format === 'csv') {
+        await exportApi.downloadCSV(filters);
+      } else {
+        const data = (await exportApi.getExcelData(filters)) as ExcelExportData;
+        generateExcel(data);
+      }
+      onClose();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erreur lors de l'export";
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
-    <div style={{
-      position: 'fixed',
-      inset: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.7)',
-      backdropFilter: 'blur(4px)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 50,
-      padding: '1rem'
-    }}>
-      <div className="card" style={{ width: '100%', maxWidth: '28rem', padding: '1.5rem', borderRadius: '1rem', background: '#111827', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <div style={{ width: '2.5rem', height: '2.5rem', borderRadius: '0.75rem', background: 'rgba(255, 183, 3, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={descriptionId}>
+      <SurfaceCard className="modal-card" style={{ maxWidth: '28rem' }}>
+        <div className="modal-header">
+          <div className="modal-header__left">
+            <div className="modal-header__icon">
               <Download size={20} color="#ffb703" />
             </div>
-            <h3 style={{ fontSize: '1.125rem', fontWeight: 'bold' }}>Exporter les rapports</h3>
+            <div>
+              <h3 className="modal-header__title" id={titleId}>
+                Exporter les rapports
+              </h3>
+              <p className="modal-header__subtitle" id={descriptionId}>
+                Choisissez le format et la période souhaités.
+              </p>
+            </div>
           </div>
-          <button
-            onClick={onClose}
-            className="link-btn"
-            style={{ padding: '0.5rem', borderRadius: '0.5rem' }}
-          >
+          <Button onClick={onClose} variant="ghost" size="sm" aria-label="Fermer la fenêtre d'export">
             <X size={20} />
-          </button>
+          </Button>
         </div>
 
         {error && (
-          <div style={{ marginBottom: '1rem', padding: '0.75rem', borderRadius: '0.5rem', background: 'rgba(239, 68, 68, 0.2)', border: '1px solid rgba(239, 68, 68, 0.5)', color: '#f87171', fontSize: '0.875rem' }}>
+          <div className="auth-alert auth-alert--error" role="alert">
             {error}
           </div>
         )}
 
-        <div style={{ display: 'grid', gap: '1rem' }}>
+        <div className="form-grid">
           <div>
-            <label style={{ display: 'block', fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: '0.5rem' }}>
-              Format d'export
-            </label>
+            <label className="form-label">Format d'export</label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
               <button
                 type="button"
                 onClick={() => setFormat('csv')}
-                style={{
-                  padding: '1rem',
-                  borderRadius: '0.5rem',
-                  border: format === 'csv' ? '1px solid #ffb703' : '1px solid rgba(255, 255, 255, 0.1)',
-                  background: format === 'csv' ? 'rgba(255, 183, 3, 0.1)' : 'transparent',
-                  textAlign: 'center',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
+                className={`permission-btn pressable ${format === 'csv' ? 'permission-btn--active' : ''}`}
+                aria-pressed={format === 'csv'}
               >
-                <FileText size={24} style={{ margin: '0 auto 0.5rem', display: 'block' }} />
-                <div style={{ fontSize: '0.875rem', fontWeight: 500 }}>CSV</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>Compatible Excel</div>
+                <div className="permission-btn__label">
+                  <FileText size={18} />
+                  CSV
+                </div>
+                <div className="permission-btn__hint">Compatible Excel</div>
               </button>
               <button
                 type="button"
                 onClick={() => setFormat('excel')}
-                style={{
-                  padding: '1rem',
-                  borderRadius: '0.5rem',
-                  border: format === 'excel' ? '1px solid #ffb703' : '1px solid rgba(255, 255, 255, 0.1)',
-                  background: format === 'excel' ? 'rgba(255, 183, 3, 0.1)' : 'transparent',
-                  textAlign: 'center',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
+                className={`permission-btn pressable ${format === 'excel' ? 'permission-btn--active' : ''}`}
+                aria-pressed={format === 'excel'}
               >
-                <FileSpreadsheet size={24} style={{ margin: '0 auto 0.5rem', display: 'block' }} />
-                <div style={{ fontSize: '0.875rem', fontWeight: 500 }}>Excel</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>Format .xls</div>
+                <div className="permission-btn__label">
+                  <FileSpreadsheet size={18} />
+                  Excel
+                </div>
+                <div className="permission-btn__hint">Format .xls</div>
               </button>
             </div>
           </div>
 
-          <div>
-            <label style={{ display: 'flex', fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: '0.5rem', alignItems: 'center' }}>
-              <Calendar size={14} style={{ marginRight: '0.25rem' }} />
-              Période (optionnel)
+          <div className="form-field">
+            <label htmlFor="export-start-date">
+              <Calendar size={14} aria-hidden="true" />
+              Du
             </label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-              <div>
-                <label style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '0.25rem' }}>Du</label>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="input"
-                  style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem' }}
-                />
-              </div>
-              <div>
-                <label style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', display: 'block', marginBottom: '0.25rem' }}>Au</label>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="input"
-                  style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem' }}
-                />
-              </div>
-            </div>
+            <input
+              id="export-start-date"
+              type="date"
+              value={startDate}
+              onChange={(event) => setStartDate(event.target.value)}
+              className="input"
+            />
           </div>
 
-          <button
-            onClick={handleExport}
-            disabled={isLoading}
-            className="btn btn--primary"
-            style={{ width: '100%', padding: '0.75rem' }}
-          >
+          <div className="form-field">
+            <label htmlFor="export-end-date">
+              <Calendar size={14} aria-hidden="true" />
+              Au
+            </label>
+            <input
+              id="export-end-date"
+              type="date"
+              value={endDate}
+              onChange={(event) => setEndDate(event.target.value)}
+              className="input"
+            />
+          </div>
+
+          <Button onClick={handleExport} loading={isLoading} className="form-actions--full" aria-label="Télécharger l'export">
             {isLoading ? (
               'Export en cours...'
             ) : (
@@ -205,13 +207,11 @@ export const ExportModal: React.FC<ExportModalProps> = ({ onClose }) => {
                 Télécharger l'export
               </>
             )}
-          </button>
+          </Button>
         </div>
 
-        <p style={{ marginTop: '1rem', fontSize: '0.75rem', color: 'var(--color-text-secondary)', textAlign: 'center' }}>
-          L'export contient tous vos rapports avec leurs travaux supplémentaires.
-        </p>
-      </div>
+        <p className="modal-footer">L'export contient vos rapports et leurs travaux supplémentaires.</p>
+      </SurfaceCard>
     </div>
   );
 };

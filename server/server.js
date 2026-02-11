@@ -159,6 +159,31 @@ app.use((err, req, res, next) => {
 });
 
 // Initialisation et démarrage
+const listenApp = (port) =>
+  new Promise((resolve, reject) => {
+    const server = app.listen(port, () => {
+      logger.info('API server started', {
+        port: Number(port),
+        nodeEnv: process.env.NODE_ENV || 'development',
+        database: 'postgresql',
+        auth: 'jwt',
+        cache: getCacheStatus(),
+      });
+      resolve(true);
+    });
+
+    server.on('error', (err) => {
+      if (err?.code === 'EADDRINUSE') {
+        logger.warn('API port already in use. Reusing existing process.', {
+          port: Number(port),
+        });
+        resolve(false);
+        return;
+      }
+      reject(err);
+    });
+  });
+
 const start = async () => {
   try {
     // En production, éviter de relancer le SQL schema à chaque redémarrage
@@ -176,17 +201,8 @@ const start = async () => {
     }
 
     await initializeCache();
-    
-    // Démarrer le serveur
-    app.listen(PORT, () => {
-      logger.info('API server started', {
-        port: Number(PORT),
-        nodeEnv: process.env.NODE_ENV || 'development',
-        database: 'postgresql',
-        auth: 'jwt',
-        cache: getCacheStatus(),
-      });
-    });
+
+    await listenApp(PORT);
     
   } catch (error) {
     logger.error('Failed to start server', {

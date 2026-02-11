@@ -82,28 +82,6 @@ const categoryLabel = (category: string) => {
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
-const roundRectPath = (
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number
-) => {
-  const radius = Math.max(0, Math.min(r, Math.min(w, h) / 2));
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.lineTo(x + w - radius, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
-  ctx.lineTo(x + w, y + h - radius);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
-  ctx.lineTo(x + radius, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
-  ctx.lineTo(x, y + radius);
-  ctx.quadraticCurveTo(x, y, x + radius, y);
-  ctx.closePath();
-};
-
 const renderPlanZoomWithInset = (
   plan: ApiPlan,
   point: ApiPlanPoint,
@@ -128,30 +106,31 @@ const renderPlanZoomWithInset = (
       const centerX = (point.positionX / 100) * img.width;
       const centerY = (point.positionY / 100) * img.height;
 
-      // Crop a region around the point to avoid the plan feeling "too zoomed out".
-      // Keep enough context while making the marker readable on mobile PDF viewers.
-      // Zoom a bit more than before: conducteurs de travaux need the marker area readable.
-      let cropW = Math.min(img.width, Math.max(420, img.width * 0.28));
-      let cropH = cropW / aspect;
-      if (cropH > img.height) {
-        cropH = img.height;
-        cropW = cropH * aspect;
-      }
-
-      const sx = clamp(centerX - cropW / 2, 0, img.width - cropW);
-      const sy = clamp(centerY - cropH / 2, 0, img.height - cropH);
-
       // White base
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, outW, outH);
 
-      // Main zoomed plan
-      ctx.drawImage(img, sx, sy, cropW, cropH, 0, 0, outW, outH);
+      // Full-plan render (no crop/zoom): keep the entire plan visible and place marker in context.
+      const planRatio = img.width / img.height;
+      const boxRatio = outW / outH;
 
-      // Marker in zoomed view
-      const mx = ((centerX - sx) / cropW) * outW;
-      const my = ((centerY - sy) / cropH) * outH;
-      const r = Math.max(26, Math.round(outW * 0.028));
+      let drawW = outW;
+      let drawH = outH;
+      let drawX = 0;
+      let drawY = 0;
+      if (planRatio > boxRatio) {
+        drawH = outW / planRatio;
+        drawY = (outH - drawH) / 2;
+      } else {
+        drawW = outH * planRatio;
+        drawX = (outW - drawW) / 2;
+      }
+
+      ctx.drawImage(img, 0, 0, img.width, img.height, drawX, drawY, drawW, drawH);
+
+      const mx = drawX + (centerX / img.width) * drawW;
+      const my = drawY + (centerY / img.height) * drawH;
+      const r = Math.max(18, Math.round(Math.min(drawW, drawH) * 0.032));
 
       ctx.save();
       ctx.shadowColor = 'rgba(0,0,0,0.35)';
@@ -181,93 +160,6 @@ const renderPlanZoomWithInset = (
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(String(point.pointNumber), mx, my + 1);
-      ctx.restore();
-
-      // Inset overview (full plan + crop rectangle), positioned opposite to the marker quadrant.
-      const insetW = Math.round(outW * 0.24);
-      const insetH = Math.round(outH * 0.24);
-      const insetMargin = Math.round(outW * 0.02);
-
-      const markerRight = mx > outW / 2;
-      const markerBottom = my > outH / 2;
-      const placeLeft = markerRight; // opposite quadrant
-      const placeTop = markerBottom;
-
-      const insetX = placeLeft ? insetMargin : outW - insetMargin - insetW;
-      const insetY = placeTop ? insetMargin : outH - insetMargin - insetH;
-
-      ctx.save();
-      ctx.shadowColor = 'rgba(0,0,0,0.25)';
-      ctx.shadowBlur = 20;
-      ctx.shadowOffsetX = 0;
-      ctx.shadowOffsetY = 10;
-
-      roundRectPath(ctx, insetX, insetY, insetW, insetH, 16);
-      ctx.fillStyle = 'rgba(255,255,255,0.96)';
-      ctx.fill();
-
-      ctx.shadowColor = 'transparent';
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = 'rgba(26,54,93,0.25)';
-      ctx.stroke();
-      ctx.restore();
-
-      // Plan image inside inset (preserve aspect)
-      const pad = 12;
-      const boxX = insetX + pad;
-      const boxY = insetY + pad;
-      const boxW = insetW - pad * 2;
-      const boxH = insetH - pad * 2;
-
-      const planRatio = img.width / img.height;
-      const boxRatio = boxW / boxH;
-
-      let drawW = boxW;
-      let drawH = boxH;
-      let drawX = boxX;
-      let drawY = boxY;
-      if (planRatio > boxRatio) {
-        drawH = boxW / planRatio;
-        drawY = boxY + (boxH - drawH) / 2;
-      } else {
-        drawW = boxH * planRatio;
-        drawX = boxX + (boxW - drawW) / 2;
-      }
-
-      ctx.save();
-      ctx.beginPath();
-      roundRectPath(ctx, boxX, boxY, boxW, boxH, 10);
-      ctx.clip();
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(boxX, boxY, boxW, boxH);
-      ctx.drawImage(img, 0, 0, img.width, img.height, drawX, drawY, drawW, drawH);
-      ctx.restore();
-
-      // Crop rectangle overlay on inset
-      const scaleX = drawW / img.width;
-      const scaleY = drawH / img.height;
-      const rectX = drawX + sx * scaleX;
-      const rectY = drawY + sy * scaleY;
-      const rectW = cropW * scaleX;
-      const rectH = cropH * scaleY;
-
-      ctx.save();
-      ctx.fillStyle = 'rgba(255,183,3,0.14)';
-      ctx.fillRect(rectX, rectY, rectW, rectH);
-      ctx.lineWidth = 4;
-      ctx.strokeStyle = 'rgba(255,183,3,0.95)';
-      ctx.strokeRect(rectX, rectY, rectW, rectH);
-
-      // Point dot in inset
-      const ix = drawX + centerX * scaleX;
-      const iy = drawY + centerY * scaleY;
-      ctx.beginPath();
-      ctx.arc(ix, iy, 6, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(255,183,3,0.95)';
-      ctx.fill();
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = 'rgba(26,54,93,0.95)';
-      ctx.stroke();
       ctx.restore();
 
       resolve(canvas.toDataURL('image/jpeg', 0.9));

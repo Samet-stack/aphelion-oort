@@ -10,12 +10,6 @@ import {
   validateUpdateProfile, 
   validateChangePassword 
 } from '../middleware/validation.js';
-import { 
-  generateEmailVerification, 
-  verifyEmailToken, 
-  sendVerificationEmail,
-  sendWelcomeEmail 
-} from '../services/email.js';
 import { logRouteError } from '../services/logger.js';
 
 const router = express.Router();
@@ -64,96 +58,20 @@ router.post('/register', registerLimiter, validateRegister, async (req, res) => 
   }
 });
 
-// Vérifier l'email (click sur le lien)
-router.get('/verify-email', async (req, res) => {
-  try {
-    const { token } = req.query;
-    
-    if (!token) {
-      return res.status(400).json({
-        success: false,
-        message: 'Token manquant.'
-      });
-    }
-    
-    const result = await verifyEmailToken(token);
-    
-    if (!result.valid) {
-      return res.status(400).json({
-        success: false,
-        message: result.message
-      });
-    }
-    
-    // Récupérer l'utilisateur pour l'email de bienvenue
-    const user = await get('SELECT email, first_name FROM users WHERE id = ?', [result.userId]);
-    if (user) {
-      await sendWelcomeEmail(user.email, user.firstName);
-    }
-    
-    res.json({
-      success: true,
-      message: 'Email vérifié avec succès ! Vous pouvez maintenant vous connecter.',
-      data: { userId: result.userId }
-    });
-    
-  } catch (error) {
-    logRouteError(req, 'Verify email error', error, { statusCode: 500 });
-    res.status(500).json({
-      success: false,
-      message: 'Erreur lors de la vérification de l\'email.'
-    });
-  }
+// Email verification disabled by product choice.
+// Keep endpoints for backward compatibility with old links/app versions.
+router.get('/verify-email', (_req, res) => {
+  res.status(410).json({
+    success: false,
+    message: 'La vérification email est désactivée. Connectez-vous directement.'
+  });
 });
 
-// Renvoyer l'email de vérification
-router.post('/resend-verification', async (req, res) => {
-  try {
-    const { email } = req.body;
-    
-    if (!email) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email requis.'
-      });
-    }
-    
-    const user = await get('SELECT id, first_name, email_verified FROM users WHERE email = ?', [email.toLowerCase()]);
-    
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'Aucun compte trouvé avec cet email.'
-      });
-    }
-    
-    if (user.emailVerified) {
-      return res.status(400).json({
-        success: false,
-        message: 'Cet email est déjà vérifié.'
-      });
-    }
-    
-    // Générer nouveau token
-    const verificationToken = await generateEmailVerification(user.id, email);
-    const emailResult = await sendVerificationEmail(email, verificationToken, user.firstName);
-    
-    res.json({
-      success: true,
-      message: 'Email de vérification renvoyé.',
-      data: {
-        emailSent: emailResult.success,
-        preview: emailResult.preview || false
-      }
-    });
-    
-  } catch (error) {
-    logRouteError(req, 'Resend verification error', error, { statusCode: 500 });
-    res.status(500).json({
-      success: false,
-      message: 'Erreur lors de l\'envoi de l\'email.'
-    });
-  }
+router.post('/resend-verification', (_req, res) => {
+  res.status(410).json({
+    success: false,
+    message: 'La vérification email est désactivée. Aucun envoi nécessaire.'
+  });
 });
 
 // Login - with rate limiting and validation

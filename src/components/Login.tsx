@@ -1,7 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
 import { Mail, Lock, ArrowRight, AlertCircle } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useAuth } from '../contexts/AuthContext';
+import { loginFormSchema, type LoginFormValues } from '../schemas/auth';
+import { Button, SurfaceCard, TextField } from './ui';
 
 interface LoginProps {
   onSwitchToRegister: () => void;
@@ -10,118 +14,82 @@ interface LoginProps {
 export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const { login: loginUser } = useAuth();
   const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAuth();
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    getValues,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginFormValues>({
+    resolver: zodResolver(loginFormSchema),
+    defaultValues: {
+      email: '',
+      password: '',
+    },
+  });
 
   useEffect(() => {
     const emailFromUrl = searchParams.get('email');
-    if (!emailFromUrl) return;
-    setEmail((current) => current || emailFromUrl);
-  }, [searchParams]);
+    if (!emailFromUrl || getValues('email')) return;
+    setValue('email', emailFromUrl, { shouldValidate: true });
+  }, [getValues, searchParams, setValue]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = async (values: LoginFormValues) => {
     setError('');
-    setIsLoading(true);
-
     try {
-      await login(email, password);
+      await loginUser(values.email, values.password);
       navigate('/', { replace: true });
-    } catch (err: any) {
-      setError(err.message || 'Erreur de connexion');
-    } finally {
-      setIsLoading(false);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Erreur de connexion';
+      setError(message);
     }
   };
 
   return (
     <div className="view view--centered">
-      <div className="auth-container" style={{ maxWidth: '400px', margin: '0 auto', width: '100%' }}>
-        {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <div style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: '1rem',
-          }}>
-            <img
-              src="/logo.png"
-              alt="SiteFlow Pro"
-              style={{
-                width: '80px',
-                height: '80px',
-                objectFit: 'contain',
-                filter: 'drop-shadow(0 0 20px rgba(255, 183, 3, 0.3))'
-              }}
-            />
-          </div>
-          <h1 style={{ fontSize: '2rem', fontWeight: 'bold', fontFamily: 'var(--font-display)', color: 'var(--color-text-primary)' }}>SiteFlow Pro</h1>
-          <p style={{ color: 'var(--color-text-secondary)', marginTop: '0.5rem' }}>Connectez-vous à votre compte</p>
+      <div className="auth-shell">
+        <div className="auth-brand">
+          <img src="/logo.png" alt="SiteFlow Pro" className="auth-brand__logo" />
+          <h1 className="auth-brand__title">SiteFlow Pro</h1>
+          <p className="auth-brand__subtitle">Connectez-vous à votre compte</p>
         </div>
 
-        {/* Form */}
-        <div className="card">
+        <SurfaceCard>
           {error && (
-            <div style={{
-              marginBottom: '1rem',
-              padding: '0.75rem',
-              borderRadius: '8px',
-              background: 'rgba(239, 68, 68, 0.2)',
-              border: '1px solid rgba(239, 68, 68, 0.5)',
-              color: '#f87171',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              fontSize: '0.875rem'
-            }}>
-              <AlertCircle size={16} />
+            <div className="auth-alert auth-alert--error" role="alert">
+              <AlertCircle size={16} aria-hidden="true" />
               {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div className="form-field">
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-text-secondary)', marginBottom: '0.25rem', fontSize: '0.875rem' }}>
-                <Mail size={14} />
-                Email
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="input"
-                placeholder="votre@email.com"
-                required
-              />
-            </div>
+          <form onSubmit={handleSubmit(onSubmit)} className="auth-form">
+            <TextField
+              id="login-email"
+              type="email"
+              label="Email"
+              icon={Mail}
+              placeholder="votre@email.com"
+              autoComplete="email"
+              error={errors.email?.message}
+              {...register('email')}
+            />
 
-            <div className="form-field">
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-text-secondary)', marginBottom: '0.25rem', fontSize: '0.875rem' }}>
-                <Lock size={14} />
-                Mot de passe
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="input"
-                placeholder="••••••••"
-                required
-                minLength={6}
-              />
-            </div>
+            <TextField
+              id="login-password"
+              type="password"
+              label="Mot de passe"
+              icon={Lock}
+              placeholder="••••••••"
+              autoComplete="current-password"
+              error={errors.password?.message}
+              {...register('password')}
+            />
 
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="btn btn--primary"
-              style={{ width: '100%', marginTop: '0.5rem' }}
-            >
-              {isLoading ? (
+            <Button type="submit" loading={isSubmitting} className="w-full mt-2" aria-label="Se connecter">
+              {isSubmitting ? (
                 'Connexion...'
               ) : (
                 <>
@@ -129,38 +97,31 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
                   <ArrowRight size={18} />
                 </>
               )}
-            </button>
+            </Button>
           </form>
 
-          <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
-            <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
-              Pas encore de compte ?{' '}
-              <button
-                onClick={onSwitchToRegister}
-                style={{ color: 'var(--color-primary)', fontWeight: '500', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
-              >
-                Créer un compte
-              </button>
-            </p>
-          </div>
-        </div>
+          <p className="auth-switch">
+            Pas encore de compte ?{' '}
+            <button type="button" onClick={onSwitchToRegister} className="auth-switch__btn">
+              Créer un compte
+            </button>
+          </p>
+        </SurfaceCard>
 
-        {/* Features */}
-        <div style={{ marginTop: '2rem', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', textAlign: 'center', fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
-          <div>
-            <div style={{ fontSize: '1.25rem', marginBottom: '0.25rem' }}>🔒</div>
+        <div className="auth-features" aria-hidden="true">
+          <div className="auth-feature">
+            <div className="auth-feature__icon">🔒</div>
             Données sécurisées
           </div>
-          <div>
-            <div style={{ fontSize: '1.25rem', marginBottom: '0.25rem' }}>☁️</div>
+          <div className="auth-feature">
+            <div className="auth-feature__icon">☁️</div>
             Sauvegarde cloud
           </div>
-          <div>
-            <div style={{ fontSize: '1.25rem', marginBottom: '0.25rem' }}>📱</div>
+          <div className="auth-feature">
+            <div className="auth-feature__icon">📱</div>
             Accès multi-appareils
           </div>
         </div>
-
       </div>
     </div>
   );

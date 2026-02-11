@@ -18,6 +18,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         <div className="app">
             <motion.header
                 className="app__header"
+                role="banner"
                 initial={{ y: -20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ duration: 0.5 }}
@@ -25,28 +26,38 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                     // Styles moved to .app__header in index.css for better performance
                 }}
             >
-                <div className="brand">
-                    <div className="brand__mark" style={{ background: 'var(--primary)', color: 'black' }}>
+                <div className="flex items-center gap-3">
+                    <div className="relative w-12 h-12 flex items-center justify-center">
                         {showLogo ? (
-                            <img
-                                src={branding.logoUrl}
-                                alt={`${branding.companyName} logo`}
-                                onError={() => setLogoError(true)}
-                            />
+                            <div className="relative w-full h-full rounded-xl overflow-hidden bg-white/5 border border-white/10 shadow-lg ring-1 ring-white/5">
+                                <img
+                                    src={branding.logoUrl}
+                                    alt={branding.companyName}
+                                    className="w-full h-full object-cover"
+                                    onError={() => setLogoError(true)}
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-tr from-black/20 to-transparent pointer-events-none" />
+                            </div>
                         ) : (
-                            <span className="brand__mark-text" style={{ fontWeight: 800 }}>SF</span>
+                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/20 text-slate-900 font-bold font-display text-xl">
+                                SF
+                            </div>
                         )}
                     </div>
-                    <div className="brand__text">
-                        <span className="brand__name" style={{ letterSpacing: '-0.02em' }}>{branding.productName}</span>
-                        <span className="brand__tag" style={{ color: 'var(--primary)' }}>{branding.companyName}</span>
+                    <div className="flex flex-col">
+                        <span className="font-display font-bold text-lg leading-tight tracking-tight text-white/90">
+                            {branding.productName}
+                        </span>
+                        <span className="text-[0.65rem] uppercase tracking-widest font-semibold text-amber-500/80">
+                            {branding.companyName}
+                        </span>
                     </div>
                 </div>
 
                 <div className="status-row">
                     {isAuthenticated && user && <OfflineStatusDot />}
                     {isAuthenticated && user ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                             <div className="status-user" title={user.email}>
                                 <User size={20} color="var(--primary)" />
                                 <span className="status-user__name">{user.firstName || user.email}</span>
@@ -55,6 +66,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                                 onClick={logout}
                                 className="btn btn--ghost btn--danger btn--sm btn--pill"
                                 style={{ border: '1px solid var(--border-light)' }}
+                                aria-label="Se déconnecter du compte"
                             >
                                 <LogOut size={16} />
                                 <span>Déconnexion</span>
@@ -69,7 +81,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 </div>
             </motion.header>
 
-            <main className="app__main">
+            <main className="app__main" role="main">
                 <div className="app__surface" style={{ maxWidth: '100%', padding: 0 }}>
                     {children}
                 </div>
@@ -77,9 +89,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
             <footer className="app__footer" style={{ borderTop: '1px solid var(--border-light)', color: 'var(--text-muted)' }}>
                 {branding.productName} © 2026
-                {isAuthenticated && user?.companyName && (
-                    <span className="ml-2">• {user.companyName}</span>
-                )}
             </footer>
 
             {isAuthenticated && <OfflineIndicator />}

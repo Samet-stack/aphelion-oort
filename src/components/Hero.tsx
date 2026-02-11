@@ -1,6 +1,8 @@
-import React from 'react';
-import { Camera, FileText, MapPin, Sparkles, ArrowRight, Map, ShieldCheck, Cloud, Smartphone } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Camera, FileText, Sparkles, ArrowRight, Map, ShieldCheck, Cloud, Smartphone, Building2, Layers, MapPin } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { sitesApi, type ApiSiteListItem } from '../services/api';
+import { branding } from '../config/branding';
 
 interface HeroProps {
     onStart: () => void;
@@ -8,9 +10,38 @@ interface HeroProps {
 }
 
 export const Hero: React.FC<HeroProps> = ({ onStart, onHistory }) => {
-    const now = new Date();
-    const dateLabel = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium' }).format(now);
-    const timeLabel = new Intl.DateTimeFormat('fr-FR', { timeStyle: 'short' }).format(now);
+    const [sites, setSites] = useState<ApiSiteListItem[]>([]);
+    const [loadingSites, setLoadingSites] = useState(true);
+
+    useEffect(() => {
+        let active = true;
+        const loadSites = async () => {
+            try {
+                const data = await sitesApi.getAll();
+                if (active) {
+                    setSites(data.slice(0, 5));
+                }
+            } catch {
+                if (active) {
+                    setSites([]);
+                }
+            } finally {
+                if (active) {
+                    setLoadingSites(false);
+                }
+            }
+        };
+
+        loadSites();
+        return () => {
+            active = false;
+        };
+    }, []);
+
+    const totalPlans = useMemo(
+        () => sites.reduce((sum, site) => sum + (site.plansCount || 0), 0),
+        [sites]
+    );
 
     const containerVariants = {
         hidden: { opacity: 0 },
@@ -58,7 +89,7 @@ export const Hero: React.FC<HeroProps> = ({ onStart, onHistory }) => {
                             style={{ boxShadow: '0 4px 20px var(--primary-glow)' }}
                         >
                             <Map size={18} />
-                            Choisir un chantier
+                            + Nouveau chantier
                             <ArrowRight size={18} />
                         </motion.button>
                         <motion.button
@@ -102,43 +133,87 @@ export const Hero: React.FC<HeroProps> = ({ onStart, onHistory }) => {
                     </motion.div>
                 </div>
 
-                <motion.div variants={itemVariants} className="hero__preview">
-                    <div className="report-preview" style={{
-                        background: 'var(--bg-surface)',
-                        borderColor: 'var(--border-light)',
-                        boxShadow: '0 20px 40px -10px rgba(0,0,0,0.5)'
-                    }}>
-                        <div className="report-preview__header">
-                            <div>
-                                <p className="report-preview__title">Rapport terrain #024</p>
-                                <p className="report-preview__date">
-                                    {dateLabel} · {timeLabel}
-                                </p>
-                            </div>
-                            <div className="report-preview__badge" style={{ background: 'var(--primary)', color: 'black' }}>PDF</div>
+                <div className="w-full bg-slate-900/50 backdrop-blur-md border border-white/10 rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/5">
+                    {/* Header */}
+                    <div className="p-5 border-b border-white/5 bg-white/5 flex items-center justify-between">
+                        <div>
+                            <h3 className="text-lg font-bold text-white flex items-center gap-2 font-display">
+                                <Building2 size={20} className="text-amber-400" />
+                                Vos chantiers
+                            </h3>
+                            <p className="text-slate-400 text-xs mt-1 font-medium tracking-wide uppercase">
+                                {loadingSites ? 'Synchronisation...' : `${sites.length} Récents`}
+                            </p>
                         </div>
-                        <div className="report-preview__image" style={{ background: 'linear-gradient(to bottom, #2a2a2a, #1a1a1a)' }}>
-                            <span style={{ color: 'var(--text-muted)' }}>
-                                <MapPin size={16} />
-                                Zone B - Structure principale
-                            </span>
-                        </div>
-                        <div className="report-preview__meta">
-                            <div className="report-preview__row">
-                                <span style={{ color: 'var(--text-muted)' }}>Horodatage</span>
-                                <strong>{timeLabel}</strong>
-                            </div>
-                            <div className="report-preview__row">
-                                <span style={{ color: 'var(--text-muted)' }}>Localisation</span>
-                                <strong>GPS précis</strong>
-                            </div>
-                            <div className="report-preview__row">
-                                <span style={{ color: 'var(--text-muted)' }}>Validation</span>
-                                <strong>Chef de chantier</strong>
-                            </div>
+                        <div className="px-3 py-1.5 rounded-full bg-slate-800/80 border border-white/10 text-xs font-semibold text-slate-300 flex items-center gap-2 shadow-inner">
+                            <Layers size={14} className="text-amber-400" />
+                            {totalPlans} plans
                         </div>
                     </div>
-                </motion.div>
+
+                    {/* List */}
+                    <div className="divide-y divide-white/5">
+                        {loadingSites && [...Array(3)].map((_, i) => (
+                            <div key={i} className="p-4 flex items-center gap-4 animate-pulse">
+                                <div className="w-12 h-12 rounded-xl bg-white/5" />
+                                <div className="flex-1 space-y-2">
+                                    <div className="h-4 w-1/3 bg-white/5 rounded" />
+                                    <div className="h-3 w-1/2 bg-white/5 rounded" />
+                                </div>
+                            </div>
+                        ))}
+
+                        {!loadingSites && sites.length === 0 && (
+                            <div className="p-8 text-center flex flex-col items-center gap-3">
+                                <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center ring-1 ring-white/10">
+                                    <MapPin className="text-slate-500" />
+                                </div>
+                                <p className="text-slate-400 text-sm">Aucun chantier récent</p>
+                                <button onClick={onStart} className="text-amber-400 text-sm font-semibold hover:text-amber-300 transition-colors">
+                                    Créer un nouveau chantier
+                                </button>
+                            </div>
+                        )}
+
+                        {!loadingSites && sites.map((site) => (
+                            <button
+                                key={site.id}
+                                onClick={onStart}
+                                className="w-full p-4 flex items-center gap-4 hover:bg-white/5 transition-colors text-left group relative overflow-hidden"
+                            >
+                                <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 ring-1 ring-white/10 overflow-hidden relative">
+                                    {branding.logoUrl ? (
+                                        <img
+                                            src={branding.logoUrl}
+                                            alt="Site Logo"
+                                            className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"
+                                        />
+                                    ) : (
+                                        <Building2 size={24} className="text-amber-500" />
+                                    )}
+                                </div>
+                                <div className="flex-1 z-10">
+                                    <p className="font-semibold text-white group-hover:text-amber-400 transition-colors text-[0.95rem]">
+                                        {site.siteName}
+                                    </p>
+                                    <div className="flex items-center gap-3 text-xs text-slate-400 mt-1">
+                                        <span className="flex items-center gap-1">
+                                            <MapPin size={12} />
+                                            {site.pointsCount} points
+                                        </span>
+                                        <span className="flex items-center gap-1">
+                                            <Layers size={12} />
+                                            {site.plansCount} plans
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="text-slate-600 group-hover:text-amber-400 group-hover:translate-x-1 transition-all duration-300">
+                                    <ArrowRight size={20} />
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
             </div>
 
             <motion.div variants={itemVariants} className="hero__bottom">

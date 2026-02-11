@@ -630,116 +630,116 @@ export const PlanView: React.FC<PlanViewProps> = ({
     }
   };
 
-    // Back navigation
-    const handleBackToSites = () => {
-      setCurrentPlan(null);
-      setCurrentSite(null);
-      setSitePlans([]);
-      setSubView('SITES');
-      loadSites();
-    };
+  // Back navigation
+  const handleBackToSites = () => {
+    setCurrentPlan(null);
+    setCurrentSite(null);
+    setSitePlans([]);
+    setSubView('SITES');
+    loadSites();
+  };
 
-    const handleBackToSite = () => {
-      setCurrentPlan(null);
-      setPanelMode('closed');
-      setSelectedPoint(null);
-      setEditingPoint(null);
-      setClickPosition(null);
-      setSubView('SITE');
-      refreshCurrentSitePlans();
-      loadSites();
-    };
+  const handleBackToSite = () => {
+    setCurrentPlan(null);
+    setPanelMode('closed');
+    setSelectedPoint(null);
+    setEditingPoint(null);
+    setClickPosition(null);
+    setSubView('SITE');
+    refreshCurrentSitePlans();
+    loadSites();
+  };
 
-    const handleOpenCreateSite = () => {
-      setSiteNameInput('');
-      setSiteAddressInput('');
-      setSubView('CREATE_SITE');
-    };
+  const handleOpenCreateSite = () => {
+    setSiteNameInput('');
+    setSiteAddressInput('');
+    setSubView('CREATE_SITE');
+  };
 
-    const handleOpenUploadPlan = () => {
-      if (!currentSite) return;
-      setPlanNameInput('Plan principal');
-      setPlanImageDataUrl('');
-      setSubView('UPLOAD_PLAN');
-    };
+  const handleOpenUploadPlan = () => {
+    if (!currentSite) return;
+    setPlanNameInput('Plan principal');
+    setPlanImageDataUrl('');
+    setSubView('UPLOAD_PLAN');
+  };
 
-    // === RENDER ===
+  // === RENDER ===
 
-    // SITES view
-    if (subView === 'SITES') {
-      return (
-        <>
-          <div className="view">
-            <div className="view__top">
-              <button type="button" onClick={onBack} className="link-btn">
-                <ArrowLeft size={16} /> Accueil
+  // SITES view
+  if (subView === 'SITES') {
+    return (
+      <>
+        <div className="view">
+          <div className="view__top">
+            <button type="button" onClick={onBack} className="link-btn">
+              <ArrowLeft size={16} /> Accueil
+            </button>
+          </div>
+
+          <div className="card">
+            <PageHeader
+              title="Chantiers"
+              icon={Building2}
+              subtitle="Organisez vos plans et vos points par chantier."
+            >
+              <button type="button" className="btn btn--primary" onClick={handleOpenCreateSite}>
+                <Plus size={16} /> Choisir un chantier
               </button>
-            </div>
+            </PageHeader>
 
-            <div className="card">
-              <PageHeader
-                title="Chantiers"
+            {loadingSites ? (
+              <LoadingState text="Chargement..." />
+            ) : sites.length === 0 ? (
+              <EmptyState
                 icon={Building2}
-                subtitle="Organisez vos plans et vos points par chantier."
-              >
-                <button type="button" className="btn btn--primary" onClick={handleOpenCreateSite}>
-                  <Plus size={16} /> Nouveau chantier
-                </button>
-              </PageHeader>
-
-              {loadingSites ? (
-                <LoadingState text="Chargement..." />
-              ) : sites.length === 0 ? (
-                <EmptyState
-                  icon={Building2}
-                  title="Aucun chantier pour le moment."
-                  hint='Cliquez sur "Nouveau chantier" pour commencer.'
-                />
-              ) : (
-                <div className="plan-list">
-                  {sites.map((site) => (
-                    <div key={site.id} className="plan-card" onClick={() => openSite(site.id)}>
-                      <div className="plan-card__info">
-                        <span className="plan-card__name">{site.siteName}</span>
-                        <span className="plan-card__meta">
-                          {site.address ? `${site.address} · ` : ''}
-                          {site.plansCount} plan(s) · {site.pointsCount} point(s)
-                        </span>
-                      </div>
-                      <div className="plan-card__badge">
-                        <span className="badge badge--info">{site.plansCount} plan(s)</span>
-                        <span className="badge badge--info">{site.pointsCount} point(s)</span>
-                        <button
-                          className="btn btn--ghost btn-danger-ghost"
-                          onClick={(e) => handleDeleteSite(site.id, e)}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
+                title="Aucun chantier pour le moment."
+                hint='Cliquez sur "Nouveau chantier" pour commencer.'
+              />
+            ) : (
+              <div className="plan-list">
+                {sites.map((site) => (
+                  <div key={site.id} className="plan-card" onClick={() => openSite(site.id)}>
+                    <div className="plan-card__info">
+                      <span className="plan-card__name">{site.siteName}</span>
+                      <span className="plan-card__meta">
+                        {site.address ? `${site.address} · ` : ''}
+                        {site.plansCount} plan(s) · {site.pointsCount} point(s)
+                      </span>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {loadingSite && (
-              <div className="modal-overlay">
-                <div className="modal-loading">
-                  <Loader2 size={32} className="spin" />
-                  <p className="modal-loading__text">Chargement du chantier...</p>
-                </div>
-              </div>
-            )}
-
-            {loadingPlan && (
-              <div className="modal-overlay">
-                <div className="modal-loading">
-                  <Loader2 size={32} className="spin" />
-                  <p className="modal-loading__text">Chargement du plan...</p>
-                </div>
+                    <div className="plan-card__badge">
+                      <span className="badge badge--info">{site.plansCount} plan(s)</span>
+                      <span className="badge badge--info">{site.pointsCount} point(s)</span>
+                      <button
+                        className="btn btn--ghost btn-danger-ghost"
+                        onClick={(e) => handleDeleteSite(site.id, e)}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
+
+          {loadingSite && (
+            <div className="modal-overlay">
+              <div className="modal-loading">
+                <Loader2 size={32} className="spin" />
+                <p className="modal-loading__text">Chargement du chantier...</p>
+              </div>
+            </div>
+          )}
+
+          {loadingPlan && (
+            <div className="modal-overlay">
+              <div className="modal-loading">
+                <Loader2 size={32} className="spin" />
+                <p className="modal-loading__text">Chargement du plan...</p>
+              </div>
+            </div>
+          )}
+        </div>
 
         <ConfirmModal
           isOpen={!!confirmState}
@@ -752,19 +752,19 @@ export const PlanView: React.FC<PlanViewProps> = ({
           isDestructive={confirmState?.isDestructive}
         />
       </>
-      );
-    }
+    );
+  }
 
-    // CREATE_SITE view
-    if (subView === 'CREATE_SITE') {
-      return (
-        <>
-          <div className="view">
-            <div className="view__top">
-              <button type="button" onClick={() => setSubView('SITES')} className="link-btn">
-                <ArrowLeft size={16} /> Chantiers
-              </button>
-            </div>
+  // CREATE_SITE view
+  if (subView === 'CREATE_SITE') {
+    return (
+      <>
+        <div className="view">
+          <div className="view__top">
+            <button type="button" onClick={() => setSubView('SITES')} className="link-btn">
+              <ArrowLeft size={16} /> Chantiers
+            </button>
+          </div>
 
           <div className="card">
             <PageHeader title="Nouveau chantier" icon={Plus} compact />
@@ -801,7 +801,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
               </button>
             </div>
           </div>
-          </div>
+        </div>
 
         <ConfirmModal
           isOpen={!!confirmState}
@@ -814,38 +814,12 @@ export const PlanView: React.FC<PlanViewProps> = ({
           isDestructive={confirmState?.isDestructive}
         />
       </>
-      );
-    }
+    );
+  }
 
-    // SITE view
-    if (subView === 'SITE') {
-      if (!currentSite) {
-        return (
-          <>
-            <div className="view">
-              <div className="view__top">
-                <button type="button" onClick={handleBackToSites} className="link-btn">
-                  <ArrowLeft size={16} /> Chantiers
-                </button>
-              </div>
-              <div className="card">
-                <EmptyState icon={Building2} title="Chantier introuvable." compact />
-              </div>
-            </div>
-            <ConfirmModal
-              isOpen={!!confirmState}
-              onClose={() => setConfirmState(null)}
-              onConfirm={async () => confirmState?.onConfirm()}
-              title={confirmState?.title ?? ''}
-              message={confirmState?.message ?? ''}
-              confirmLabel={confirmState?.confirmLabel}
-              cancelLabel={confirmState?.cancelLabel}
-              isDestructive={confirmState?.isDestructive}
-            />
-          </>
-        );
-      }
-
+  // SITE view
+  if (subView === 'SITE') {
+    if (!currentSite) {
       return (
         <>
           <div className="view">
@@ -854,189 +828,126 @@ export const PlanView: React.FC<PlanViewProps> = ({
                 <ArrowLeft size={16} /> Chantiers
               </button>
             </div>
-
             <div className="card">
-              <PageHeader
-                title={currentSite.siteName}
-                icon={Building2}
-                subtitle={currentSite.address || 'Adresse non renseignée'}
-                compact
-              >
-                <div className="card-actions">
-                  <button
-                    className="btn btn--ghost btn-danger-ghost"
-                    onClick={(e) => handleDeleteSite(currentSite.id, e)}
-                    title="Supprimer le chantier"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                  <button type="button" className="btn btn--primary" onClick={handleOpenUploadPlan}>
-                    <Plus size={16} /> Ajouter un plan
-                  </button>
-                </div>
-              </PageHeader>
-
-              {loadingSite ? (
-                <LoadingState text="Chargement..." />
-              ) : sitePlans.length === 0 ? (
-                <EmptyState
-                  icon={Layers}
-                  title="Aucun plan pour ce chantier."
-                  hint='Cliquez sur "Ajouter un plan" pour commencer.'
-                />
-              ) : (
-                <div className="plan-list">
-                  {sitePlans.map((plan) => (
-                    <div key={plan.id} className="plan-card" onClick={() => openPlan(plan.id)}>
-                      <div className="plan-card__info">
-                        <span className="plan-card__name">{plan.planName}</span>
-                        <span className="plan-card__meta">
-                          {plan.pointsCount} point(s) · {new Date(plan.createdAt).toLocaleDateString('fr-FR')}
-                        </span>
-                      </div>
-                      <div className="plan-card__badge">
-                        <span className="badge badge--info">{plan.pointsCount} point(s)</span>
-                        <button
-                          className="btn btn--ghost btn-danger-ghost"
-                          onClick={(e) => handleDeletePlan(plan.id, e)}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <EmptyState icon={Building2} title="Chantier introuvable." compact />
             </div>
+          </div>
+          <ConfirmModal
+            isOpen={!!confirmState}
+            onClose={() => setConfirmState(null)}
+            onConfirm={async () => confirmState?.onConfirm()}
+            title={confirmState?.title ?? ''}
+            message={confirmState?.message ?? ''}
+            confirmLabel={confirmState?.confirmLabel}
+            cancelLabel={confirmState?.cancelLabel}
+            isDestructive={confirmState?.isDestructive}
+          />
+        </>
+      );
+    }
 
-            {loadingPlan && (
-              <div className="modal-overlay">
-                <div className="modal-loading">
-                  <Loader2 size={32} className="spin" />
-                  <p className="modal-loading__text">Chargement du plan...</p>
-                </div>
+    return (
+      <>
+        <div className="view">
+          <div className="view__top">
+            <button type="button" onClick={handleBackToSites} className="link-btn">
+              <ArrowLeft size={16} /> Chantiers
+            </button>
+          </div>
+
+          <div className="card">
+            <PageHeader
+              title={currentSite.siteName}
+              icon={Building2}
+              subtitle={currentSite.address || 'Adresse non renseignée'}
+              compact
+            >
+              <div className="card-actions">
+                <button
+                  className="btn btn--ghost btn-danger-ghost"
+                  onClick={(e) => handleDeleteSite(currentSite.id, e)}
+                  title="Supprimer le chantier"
+                >
+                  <Trash2 size={16} />
+                </button>
+                <button type="button" className="btn btn--primary" onClick={handleOpenUploadPlan}>
+                  <Plus size={16} /> Ajouter un plan
+                </button>
+              </div>
+            </PageHeader>
+
+            {loadingSite ? (
+              <LoadingState text="Chargement..." />
+            ) : sitePlans.length === 0 ? (
+              <EmptyState
+                icon={Layers}
+                title="Aucun plan pour ce chantier."
+                hint='Cliquez sur "Ajouter un plan" pour commencer.'
+              />
+            ) : (
+              <div className="plan-list">
+                {sitePlans.map((plan) => (
+                  <div key={plan.id} className="plan-card" onClick={() => openPlan(plan.id)}>
+                    <div className="plan-card__info">
+                      <span className="plan-card__name">{plan.planName}</span>
+                      <span className="plan-card__meta">
+                        {plan.pointsCount} point(s) · {new Date(plan.createdAt).toLocaleDateString('fr-FR')}
+                      </span>
+                    </div>
+                    <div className="plan-card__badge">
+                      <span className="badge badge--info">{plan.pointsCount} point(s)</span>
+                      <button
+                        className="btn btn--ghost btn-danger-ghost"
+                        onClick={(e) => handleDeletePlan(plan.id, e)}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
 
-          <ConfirmModal
-            isOpen={!!confirmState}
-            onClose={() => setConfirmState(null)}
-            onConfirm={async () => confirmState?.onConfirm()}
-            title={confirmState?.title ?? ''}
-            message={confirmState?.message ?? ''}
-            confirmLabel={confirmState?.confirmLabel}
-            cancelLabel={confirmState?.cancelLabel}
-            isDestructive={confirmState?.isDestructive}
-          />
-        </>
-      );
-    }
-
-    // UPLOAD_PLAN view
-    if (subView === 'UPLOAD_PLAN') {
-      if (!currentSite) {
-        return (
-          <>
-            <div className="view">
-              <div className="view__top">
-                <button type="button" onClick={handleBackToSites} className="link-btn">
-                  <ArrowLeft size={16} /> Chantiers
-                </button>
-              </div>
-              <div className="card">
-                <EmptyState icon={Layers} title="Veuillez d'abord sélectionner un chantier." compact />
+          {loadingPlan && (
+            <div className="modal-overlay">
+              <div className="modal-loading">
+                <Loader2 size={32} className="spin" />
+                <p className="modal-loading__text">Chargement du plan...</p>
               </div>
             </div>
-            <ConfirmModal
-              isOpen={!!confirmState}
-              onClose={() => setConfirmState(null)}
-              onConfirm={async () => confirmState?.onConfirm()}
-              title={confirmState?.title ?? ''}
-              message={confirmState?.message ?? ''}
-              confirmLabel={confirmState?.confirmLabel}
-              cancelLabel={confirmState?.cancelLabel}
-              isDestructive={confirmState?.isDestructive}
-            />
-          </>
-        );
-      }
+          )}
+        </div>
 
+        <ConfirmModal
+          isOpen={!!confirmState}
+          onClose={() => setConfirmState(null)}
+          onConfirm={async () => confirmState?.onConfirm()}
+          title={confirmState?.title ?? ''}
+          message={confirmState?.message ?? ''}
+          confirmLabel={confirmState?.confirmLabel}
+          cancelLabel={confirmState?.cancelLabel}
+          isDestructive={confirmState?.isDestructive}
+        />
+      </>
+    );
+  }
+
+  // UPLOAD_PLAN view
+  if (subView === 'UPLOAD_PLAN') {
+    if (!currentSite) {
       return (
         <>
           <div className="view">
             <div className="view__top">
-              <button type="button" onClick={() => setSubView('SITE')} className="link-btn">
-                <ArrowLeft size={16} /> Retour chantier
+              <button type="button" onClick={handleBackToSites} className="link-btn">
+                <ArrowLeft size={16} /> Chantiers
               </button>
             </div>
-
             <div className="card">
-              <PageHeader title="Ajouter un plan" icon={FilePlus} compact />
-
-              <div className="plan-upload">
-                <div className="form-field">
-                  <label>Nom du plan *</label>
-                  <input
-                    type="text"
-                    className="input"
-                    value={planNameInput}
-                    onChange={(e) => setPlanNameInput(e.target.value)}
-                    placeholder="Ex: RDC, Etage 1, Sous-sol..."
-                  />
-                </div>
-
-                <div className="form-field">
-                  <label>Image du plan *</label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    ref={uploadInputRef}
-                    onChange={async (e) => {
-                      if (e.target.files && e.target.files[0]) {
-                        await handleUploadFile(e.target.files[0]);
-                      }
-                    }}
-                    className="hidden"
-                  />
-                  {planImageDataUrl ? (
-                    <div>
-                      <div className="plan-upload__preview">
-                        <img src={planImageDataUrl} alt="Preview" />
-                      </div>
-                      <button
-                        className="btn btn--ghost upload-preview-actions"
-                        onClick={() => uploadInputRef.current?.click()}
-                      >
-                        <Camera size={16} /> Changer l'image
-                      </button>
-                    </div>
-                  ) : (
-                    <div
-                      className={`dropzone ${isDragging ? 'dropzone--active' : ''}`}
-                      onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                      onDragLeave={() => setIsDragging(false)}
-                      onDrop={handleUploadDrop}
-                      onClick={() => uploadInputRef.current?.click()}
-                    >
-                      <div className="dropzone__icon"><Upload size={28} /></div>
-                      <p className="dropzone__title">Deposez le plan ou cliquez pour importer</p>
-                      <p className="dropzone__hint">Formats JPG, PNG</p>
-                    </div>
-                  )}
-                </div>
-
-                <button
-                  className="btn btn--primary form-actions--full"
-                  onClick={handleUploadPlanSubmit}
-                  disabled={!planNameInput.trim() || !planImageDataUrl || uploading}
-                >
-                  {uploading ? <><Loader2 size={16} className="spin" /> Creation...</> : 'Creer le plan'}
-                </button>
-              </div>
+              <EmptyState icon={Layers} title="Veuillez d'abord sélectionner un chantier." compact />
             </div>
           </div>
-
           <ConfirmModal
             isOpen={!!confirmState}
             onClose={() => setConfirmState(null)}
@@ -1051,13 +962,102 @@ export const PlanView: React.FC<PlanViewProps> = ({
       );
     }
 
-    // VIEWER view
-    if (subView === 'VIEWER' && currentPlan) {
-      const isPanelOpen = panelMode !== 'closed';
+    return (
+      <>
+        <div className="view">
+          <div className="view__top">
+            <button type="button" onClick={() => setSubView('SITE')} className="link-btn">
+              <ArrowLeft size={16} /> Retour chantier
+            </button>
+          </div>
+
+          <div className="card">
+            <PageHeader title="Ajouter un plan" icon={FilePlus} compact />
+
+            <div className="plan-upload">
+              <div className="form-field">
+                <label>Nom du plan *</label>
+                <input
+                  type="text"
+                  className="input"
+                  value={planNameInput}
+                  onChange={(e) => setPlanNameInput(e.target.value)}
+                  placeholder="Ex: RDC, Etage 1, Sous-sol..."
+                />
+              </div>
+
+              <div className="form-field">
+                <label>Image du plan *</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  ref={uploadInputRef}
+                  onChange={async (e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      await handleUploadFile(e.target.files[0]);
+                    }
+                  }}
+                  className="hidden"
+                />
+                {planImageDataUrl ? (
+                  <div>
+                    <div className="plan-upload__preview">
+                      <img src={planImageDataUrl} alt="Preview" />
+                    </div>
+                    <button
+                      className="btn btn--ghost upload-preview-actions"
+                      onClick={() => uploadInputRef.current?.click()}
+                    >
+                      <Camera size={16} /> Changer l'image
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    className={`dropzone ${isDragging ? 'dropzone--active' : ''}`}
+                    onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={handleUploadDrop}
+                    onClick={() => uploadInputRef.current?.click()}
+                  >
+                    <div className="dropzone__icon"><Upload size={28} /></div>
+                    <p className="dropzone__title">Deposez le plan ou cliquez pour importer</p>
+                    <p className="dropzone__hint">Formats JPG, PNG</p>
+                  </div>
+                )}
+              </div>
+
+              <button
+                className="btn btn--primary form-actions--full"
+                onClick={handleUploadPlanSubmit}
+                disabled={!planNameInput.trim() || !planImageDataUrl || uploading}
+              >
+                {uploading ? <><Loader2 size={16} className="spin" /> Creation...</> : 'Creer le plan'}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <ConfirmModal
+          isOpen={!!confirmState}
+          onClose={() => setConfirmState(null)}
+          onConfirm={async () => confirmState?.onConfirm()}
+          title={confirmState?.title ?? ''}
+          message={confirmState?.message ?? ''}
+          confirmLabel={confirmState?.confirmLabel}
+          cancelLabel={confirmState?.cancelLabel}
+          isDestructive={confirmState?.isDestructive}
+        />
+      </>
+    );
+  }
+
+  // VIEWER view
+  if (subView === 'VIEWER' && currentPlan) {
+    const isPanelOpen = panelMode !== 'closed';
 
     return (
       <>
-          <div className="view">
+        <div className="view">
           <div className="view__top">
             <button type="button" onClick={handleBackToSite} className="link-btn">
               <ArrowLeft size={16} /> Retour chantier
@@ -1077,16 +1077,16 @@ export const PlanView: React.FC<PlanViewProps> = ({
                 onClick={handleGeneratePdf}
                 disabled={generatingPdf}
               >
-              {generatingPdf ? (
-                <><Loader2 size={16} className="spin" /> Generation...</>
-              ) : (
-                <><FileText size={16} /> Generer Rapport PDF</>
-              )}
-            </button>
+                {generatingPdf ? (
+                  <><Loader2 size={16} className="spin" /> Generation...</>
+                ) : (
+                  <><FileText size={16} /> Generer Rapport PDF</>
+                )}
+              </button>
+            </div>
           </div>
-        </div>
 
-            <div className={`plan-viewer-layout ${isPanelOpen ? 'plan-viewer-layout--open' : ''}`}>
+          <div className={`plan-viewer-layout ${isPanelOpen ? 'plan-viewer-layout--open' : ''}`}>
             <div className="plan-viewer-layout__main">
               <div className="card">
                 {/* Plan header */}
@@ -1102,252 +1102,252 @@ export const PlanView: React.FC<PlanViewProps> = ({
                   <span className="badge badge--info">{currentPlan.points.length} point(s)</span>
                 </div>
 
-              {/* Tabs */}
-              <div className="plan-tabs">
-                <button
-                  className={`plan-tab${viewerTab === 'PLAN' ? ' plan-tab--active' : ''}`}
-                  onClick={() => setViewerTab('PLAN')}
-                  type="button"
-                >
-                  <Map size={16} /> Plan
-                </button>
-                <button
-                  className={`plan-tab${viewerTab === 'ACTION' ? ' plan-tab--active' : ''}`}
-                  onClick={() => setViewerTab('ACTION')}
-                  type="button"
-                >
-                  <ClipboardList size={16} /> Plan d'action
-                </button>
-                <div className="plan-tabs__spacer" />
-                <div className="plan-tabs__stats">
-                  <span className="badge badge--info">{completionRate}% terminé</span>
-                  <span className="badge badge--danger">{currentPlan.points.filter((p) => p.status === 'a_faire').length} à faire</span>
-                  <span className="badge badge--warning">{currentPlan.points.filter((p) => p.status === 'en_cours').length} en cours</span>
-                </div>
-              </div>
-
-              {viewerTab === 'PLAN' && (
-                <>
-                  {/* Plan viewer */}
-                  <div className="plan-viewer" ref={viewerRef}>
-                    {/* Zoom controls */}
-                    <div className="plan-viewer__controls">
-                      <button type="button" className="btn btn--ghost" onClick={() => setZoom((z) => Math.min(z + 0.25, 4))} title="Zoom +">
-                        <ZoomIn size={18} />
-                      </button>
-                      <button type="button" className="btn btn--ghost" onClick={() => setZoom((z) => Math.max(z - 0.25, 0.5))} title="Zoom -">
-                        <ZoomOut size={18} />
-                      </button>
-                      <span className="zoom-indicator">
-                        {Math.round(zoom * 100)}%
-                      </span>
-                    </div>
-
-                    <div
-                      className="plan-viewer__canvas transform-zoom"
-                      style={{ transform: `scale(${zoom})` }}
-                      onMouseDown={handleCanvasMouseDown}
-                      onClick={handleCanvasClick}
-                    >
-                      <img
-                        ref={imageRef}
-                        src={currentPlan.imageDataUrl}
-                        alt="Plan"
-                        className="plan-viewer__image"
-                        draggable={false}
-                      />
-
-                      {/* Point markers */}
-                      {currentPlan.points.map((pt) => (
-                        <PinMarker
-                          key={pt.id}
-                          point={pt}
-                          isSelected={!!(selectedPoint?.id === pt.id && isPanelOpen)}
-                          onClick={(e) => handleMarkerClick(pt, e)}
-                        />
-                      ))}
-                    </div>
+                {/* Tabs */}
+                <div className="plan-tabs">
+                  <button
+                    className={`plan-tab${viewerTab === 'PLAN' ? ' plan-tab--active' : ''}`}
+                    onClick={() => setViewerTab('PLAN')}
+                    type="button"
+                  >
+                    <Map size={16} /> Plan
+                  </button>
+                  <button
+                    className={`plan-tab${viewerTab === 'ACTION' ? ' plan-tab--active' : ''}`}
+                    onClick={() => setViewerTab('ACTION')}
+                    type="button"
+                  >
+                    <ClipboardList size={16} /> Plan d'action
+                  </button>
+                  <div className="plan-tabs__spacer" />
+                  <div className="plan-tabs__stats">
+                    <span className="badge badge--info">{completionRate}% terminé</span>
+                    <span className="badge badge--danger">{currentPlan.points.filter((p) => p.status === 'a_faire').length} à faire</span>
+                    <span className="badge badge--warning">{currentPlan.points.filter((p) => p.status === 'en_cours').length} en cours</span>
                   </div>
+                </div>
 
-                  <p className="hint-text">
-                    Cliquez sur le plan pour ajouter un point
-                  </p>
+                {viewerTab === 'PLAN' && (
+                  <>
+                    {/* Plan viewer */}
+                    <div className="plan-viewer" ref={viewerRef}>
+                      {/* Zoom controls */}
+                      <div className="plan-viewer__controls">
+                        <button type="button" className="btn btn--ghost" onClick={() => setZoom((z) => Math.min(z + 0.25, 4))} title="Zoom +">
+                          <ZoomIn size={18} />
+                        </button>
+                        <button type="button" className="btn btn--ghost" onClick={() => setZoom((z) => Math.max(z - 0.25, 0.5))} title="Zoom -">
+                          <ZoomOut size={18} />
+                        </button>
+                        <span className="zoom-indicator">
+                          {Math.round(zoom * 100)}%
+                        </span>
+                      </div>
 
-                  {/* Points list */}
-                  {currentPlan.points.length > 0 && (
-                    <div className="points-section">
-                      <h3 className="points-section__title">
-                        Points d'inspection ({currentPlan.points.length})
-                      </h3>
-                      <div className="plan-points-list">
-                        {allPointsSorted.map((pt) => (
-                          <div
+                      <div
+                        className="plan-viewer__canvas transform-zoom"
+                        style={{ transform: `scale(${zoom})` }}
+                        onMouseDown={handleCanvasMouseDown}
+                        onClick={handleCanvasClick}
+                      >
+                        <img
+                          ref={imageRef}
+                          src={currentPlan.imageDataUrl}
+                          alt="Plan"
+                          className="plan-viewer__image"
+                          draggable={false}
+                        />
+
+                        {/* Point markers */}
+                        {currentPlan.points.map((pt) => (
+                          <PinMarker
                             key={pt.id}
-                            className={`plan-points-list__item${selectedPoint?.id === pt.id && isPanelOpen ? ' plan-points-list__item--active' : ''}`}
-                            onClick={() => {
-                              setSelectedPoint(pt);
-                              setEditingPoint(null);
-                              setPanelMode('detail');
-                            }}
-                          >
-                            <div
-                              className={`plan-points-list__number bg-status-${pt.status}`}
-                            >
-                              {pt.pointNumber}
-                            </div>
-                            <div className="plan-points-list__content">
-                              <div className="plan-points-list__title">{pt.title}</div>
-                              <div className="plan-points-list__badges">
-                                <span className="badge badge--info badge-sm">
-                                  {categoryLabels[pt.category] || pt.category}
-                                </span>
-                                <span className={`badge ${statusBadge[pt.status]} badge-sm`}>
-                                  {statusLabels[pt.status]}
-                                </span>
-                              </div>
-                            </div>
-                            <ChevronRight size={16} className="plan-points-list__chevron" />
-                          </div>
+                            point={pt}
+                            isSelected={!!(selectedPoint?.id === pt.id && isPanelOpen)}
+                            onClick={(e) => handleMarkerClick(pt, e)}
+                          />
                         ))}
                       </div>
                     </div>
-                  )}
-                </>
-              )}
 
-              {viewerTab === 'ACTION' && (
-                <div className="plan-action">
-                  <div className="plan-action__filters">
-                    <div className="plan-action__search">
-                      <Search size={16} />
-                      <input
-                        className="input plan-action__search-input"
-                        value={actionQuery}
-                        onChange={(e) => setActionQuery(e.target.value)}
-                        placeholder="Rechercher un point (#, titre, lieu...)"
-                      />
+                    <p className="hint-text">
+                      Cliquez sur le plan pour ajouter un point
+                    </p>
+
+                    {/* Points list */}
+                    {currentPlan.points.length > 0 && (
+                      <div className="points-section">
+                        <h3 className="points-section__title">
+                          Points d'inspection ({currentPlan.points.length})
+                        </h3>
+                        <div className="plan-points-list">
+                          {allPointsSorted.map((pt) => (
+                            <div
+                              key={pt.id}
+                              className={`plan-points-list__item${selectedPoint?.id === pt.id && isPanelOpen ? ' plan-points-list__item--active' : ''}`}
+                              onClick={() => {
+                                setSelectedPoint(pt);
+                                setEditingPoint(null);
+                                setPanelMode('detail');
+                              }}
+                            >
+                              <div
+                                className={`plan-points-list__number bg-status-${pt.status}`}
+                              >
+                                {pt.pointNumber}
+                              </div>
+                              <div className="plan-points-list__content">
+                                <div className="plan-points-list__title">{pt.title}</div>
+                                <div className="plan-points-list__badges">
+                                  <span className="badge badge--info badge-sm">
+                                    {categoryLabels[pt.category] || pt.category}
+                                  </span>
+                                  <span className={`badge ${statusBadge[pt.status]} badge-sm`}>
+                                    {statusLabels[pt.status]}
+                                  </span>
+                                </div>
+                              </div>
+                              <ChevronRight size={16} className="plan-points-list__chevron" />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {viewerTab === 'ACTION' && (
+                  <div className="plan-action">
+                    <div className="plan-action__filters">
+                      <div className="plan-action__search">
+                        <Search size={16} />
+                        <input
+                          className="input plan-action__search-input"
+                          value={actionQuery}
+                          onChange={(e) => setActionQuery(e.target.value)}
+                          placeholder="Rechercher un point (#, titre, lieu...)"
+                        />
+                      </div>
+                      <select
+                        className="input select plan-action__select"
+                        value={actionCategory}
+                        onChange={(e) => setActionCategory(e.target.value || 'all')}
+                        aria-label="Filtrer par catégorie"
+                      >
+                        <option value="all">Toutes catégories</option>
+                        {Object.keys(categoryLabels).map((cat) => (
+                          <option key={cat} value={cat}>
+                            {categoryLabels[cat]}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        className="btn btn--ghost plan-action__add"
+                        onClick={() => setViewerTab('PLAN')}
+                        type="button"
+                        title="Ajouter un point en cliquant sur le plan"
+                      >
+                        <Plus size={16} /> Ajouter sur le plan
+                      </button>
                     </div>
-                    <select
-                      className="input select plan-action__select"
-                      value={actionCategory}
-                      onChange={(e) => setActionCategory(e.target.value || 'all')}
-                      aria-label="Filtrer par catégorie"
-                    >
-                      <option value="all">Toutes catégories</option>
-                      {Object.keys(categoryLabels).map((cat) => (
-                        <option key={cat} value={cat}>
-                          {categoryLabels[cat]}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      className="btn btn--ghost plan-action__add"
-                      onClick={() => setViewerTab('PLAN')}
-                      type="button"
-                      title="Ajouter un point en cliquant sur le plan"
-                    >
-                      <Plus size={16} /> Ajouter sur le plan
-                    </button>
-                  </div>
 
-                  <div className="plan-action__hint action-hint">
-                    Affichage: <strong>{filteredForAction.length}</strong> / {currentPlan.points.length} point(s)
-                  </div>
+                    <div className="plan-action__hint action-hint">
+                      Affichage: <strong>{filteredForAction.length}</strong> / {currentPlan.points.length} point(s)
+                    </div>
 
-                  <div className="plan-action-board">
-                    {(
-                      [
-                        { key: 'a_faire', title: 'À faire', badge: 'badge--danger' },
-                        { key: 'en_cours', title: 'En cours', badge: 'badge--warning' },
-                        { key: 'termine', title: 'Terminé', badge: 'badge--success' },
-                      ] as const
-                    ).map((col) => {
-                      const items = byStatus[col.key];
-                      return (
-                        <section key={col.key} className="plan-action-col">
-                          <header className="plan-action-col__header">
-                            <div className="plan-action-col__title">{col.title}</div>
-                            <span className={`badge ${col.badge}`}>{items.length}</span>
-                          </header>
-                          <div className="plan-action-col__list">
-                            {items.length === 0 ? (
-                              <div className="plan-action-col__empty">Aucun point</div>
-                            ) : (
-                              items.map((pt) => {
-                                const next =
-                                  pt.status === 'a_faire'
-                                    ? { to: 'en_cours' as const, label: 'Démarrer', Icon: Play }
-                                    : pt.status === 'en_cours'
-                                      ? { to: 'termine' as const, label: 'Terminer', Icon: CheckCircle2 }
-                                      : null;
+                    <div className="plan-action-board">
+                      {(
+                        [
+                          { key: 'a_faire', title: 'À faire', badge: 'badge--danger' },
+                          { key: 'en_cours', title: 'En cours', badge: 'badge--warning' },
+                          { key: 'termine', title: 'Terminé', badge: 'badge--success' },
+                        ] as const
+                      ).map((col) => {
+                        const items = byStatus[col.key];
+                        return (
+                          <section key={col.key} className="plan-action-col">
+                            <header className="plan-action-col__header">
+                              <div className="plan-action-col__title">{col.title}</div>
+                              <span className={`badge ${col.badge}`}>{items.length}</span>
+                            </header>
+                            <div className="plan-action-col__list">
+                              {items.length === 0 ? (
+                                <div className="plan-action-col__empty">Aucun point</div>
+                              ) : (
+                                items.map((pt) => {
+                                  const next =
+                                    pt.status === 'a_faire'
+                                      ? { to: 'en_cours' as const, label: 'Démarrer', Icon: Play }
+                                      : pt.status === 'en_cours'
+                                        ? { to: 'termine' as const, label: 'Terminer', Icon: CheckCircle2 }
+                                        : null;
 
-                                return (
-                                  <article
-                                    key={pt.id}
-                                    className={`plan-action-card${selectedPoint?.id === pt.id && isPanelOpen ? ' plan-action-card--active' : ''}`}
-                                    onClick={() => {
-                                      setSelectedPoint(pt);
-                                      setEditingPoint(null);
-                                      setPanelMode('detail');
-                                    }}
-                                  >
-                                    <div
-                                      className={`plan-action-card__num bg-status-${pt.status}`}
+                                  return (
+                                    <article
+                                      key={pt.id}
+                                      className={`plan-action-card${selectedPoint?.id === pt.id && isPanelOpen ? ' plan-action-card--active' : ''}`}
+                                      onClick={() => {
+                                        setSelectedPoint(pt);
+                                        setEditingPoint(null);
+                                        setPanelMode('detail');
+                                      }}
                                     >
-                                      {pt.pointNumber}
-                                    </div>
-                                    <div className="plan-action-card__body">
-                                      <div className="plan-action-card__title">{pt.title}</div>
-                                      <div className="plan-action-card__meta">
-                                        {categoryLabels[pt.category] || pt.category}
-                                        {pt.room ? ` • ${pt.room}` : ''}
-                                      </div>
-                                    </div>
-                                    {next && (
-                                      <button
-                                        type="button"
-                                        className="btn btn--ghost plan-action-card__next"
-                                        title={next.label}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleUpdatePointStatus(pt.id, next.to);
-                                        }}
+                                      <div
+                                        className={`plan-action-card__num bg-status-${pt.status}`}
                                       >
-                                        <next.Icon size={16} />
-                                      </button>
-                                    )}
-                                    <ChevronRight size={16} className="plan-action-card__chevron" />
-                                  </article>
-                                );
-                              })
-                            )}
-                          </div>
-                        </section>
-                      );
-                    })}
+                                        {pt.pointNumber}
+                                      </div>
+                                      <div className="plan-action-card__body">
+                                        <div className="plan-action-card__title">{pt.title}</div>
+                                        <div className="plan-action-card__meta">
+                                          {categoryLabels[pt.category] || pt.category}
+                                          {pt.room ? ` • ${pt.room}` : ''}
+                                        </div>
+                                      </div>
+                                      {next && (
+                                        <button
+                                          type="button"
+                                          className="btn btn--ghost plan-action-card__next"
+                                          title={next.label}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleUpdatePointStatus(pt.id, next.to);
+                                          }}
+                                        >
+                                          <next.Icon size={16} />
+                                        </button>
+                                      )}
+                                      <ChevronRight size={16} className="plan-action-card__chevron" />
+                                    </article>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </section>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
-          </div>
 
-          {/* Side panel */}
-          <PlanPointPanel
-            isOpen={isPanelOpen}
-            mode={panelMode === 'closed' ? 'detail' : panelMode}
-            point={panelMode === 'edit' ? editingPoint || undefined : selectedPoint || undefined}
-            points={currentPlan.points}
-            onClose={handlePanelClose}
-            onSave={handleSavePoint}
-            onDelete={handleDeletePoint}
-            onEdit={handleEditFromDetail}
-            onNavigate={handleNavigatePoint}
-            onFocusPoint={handleFocusPoint}
-            onDownloadPointPdf={handleDownloadPointPdf}
-            onUpdateStatus={handleUpdatePointStatus}
-            onCreateReport={onCreateReportFromPoint ? handleCreateReportFromPoint : undefined}
-          />
-        </div>
+            {/* Side panel */}
+            <PlanPointPanel
+              isOpen={isPanelOpen}
+              mode={panelMode === 'closed' ? 'detail' : panelMode}
+              point={panelMode === 'edit' ? editingPoint || undefined : selectedPoint || undefined}
+              points={currentPlan.points}
+              onClose={handlePanelClose}
+              onSave={handleSavePoint}
+              onDelete={handleDeletePoint}
+              onEdit={handleEditFromDetail}
+              onNavigate={handleNavigatePoint}
+              onFocusPoint={handleFocusPoint}
+              onDownloadPointPdf={handleDownloadPointPdf}
+              onUpdateStatus={handleUpdatePointStatus}
+              onCreateReport={onCreateReportFromPoint ? handleCreateReportFromPoint : undefined}
+            />
+          </div>
         </div>
 
         <ConfirmModal

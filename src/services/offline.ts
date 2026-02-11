@@ -1,18 +1,42 @@
 // Service de gestion du mode hors-ligne
-// Stockage local des rapports + synchro auto
+// Stockage local des rapports + synchro auto (avec backoff progressif)
 
-import { reportsApi, type ApiReport } from './api';
+import { reportsApi, type ApiReport, type ApiReportCreateInput } from './api';
 import { offlineDB, type PendingReport } from './offline-db';
+
+interface OfflineQueueItem {
+  localId: string;
+  createdAtLocal: string;
+  syncStatus: PendingReport['syncStatus'];
+  syncAttempts: number;
+  maxSyncAttempts: number;
+  nextRetryAt: string | null;
+  lastError?: string;
+}
 
 interface OfflineState {
   isOnline: boolean;
   pendingCount: number;
+  retryScheduledCount: number;
+  failedCount: number;
+  nextRetryAt: string | null;
+  queuePreview: OfflineQueueItem[];
   isSyncing: boolean;
   lastSync: string | null;
 }
 
-const SYNC_INTERVAL = 30000; // 30 secondes
-const MAX_SYNC_ATTEMPTS = 5;
+interface SyncResult {
+  success: number;
+  failed: number;
+}
+
+type OfflineReportPayload = ApiReportCreateInput;
+
+const SYNC_INTERVAL = 30_000; // 30 secondes
+const MAX_SYNC_ATTEMPTS = 8;
+const BASE_RETRY_DELAY_MS = 15_000; // 15s
+const MAX_RETRY_DELAY_MS = 15 * 60_000; // 15min
+const QUEUE_PREVIEW_LIMIT = 5;
 
 class OfflineService {
   private listeners: Set<(state: OfflineState) => void> = new Set();
@@ -20,46 +44,44 @@ class OfflineService {
   private currentState: OfflineState = {
     isOnline: navigator.onLine,
     pendingCount: 0,
+    retryScheduledCount: 0,
+    failedCount: 0,
+    nextRetryAt: null,
+    queuePreview: [],
     isSyncing: false,
-    lastSync: null
+    lastSync: null,
   };
   private useFallback = false; // Fallback sur localStorage si IndexedDB échoue
 
   constructor() {
-    this.init();
+    void this.init();
   }
 
   private async init() {
-    // Initialiser IndexedDB
     try {
       await offlineDB.init();
       this.useFallback = false;
     } catch (error) {
-      console.warn('IndexedDB indisponible, fallback sur localStorage');
+      console.warn('IndexedDB indisponible, fallback sur localStorage', error);
       this.useFallback = true;
     }
 
-    // Écouter les changements de connexion
     window.addEventListener('online', this.handleOnline);
     window.addEventListener('offline', this.handleOffline);
+    document.addEventListener('visibilitychange', this.handleVisibilityChange);
 
-    // Charger les rapports en attente
-    await this.updatePendingCount();
-
-    // Démarrer la synchro périodique
+    await this.updatePendingState();
     this.startPeriodicSync();
 
-    // Synchro immédiate si online
     if (navigator.onLine) {
-      this.sync();
+      void this.sync();
     }
   }
 
   private handleOnline = () => {
     this.currentState.isOnline = true;
     this.notifyListeners();
-    // Synchro immédiate quand on revient online
-    this.sync();
+    void this.sync();
   };
 
   private handleOffline = () => {
@@ -67,12 +89,17 @@ class OfflineService {
     this.notifyListeners();
   };
 
+  private handleVisibilityChange = () => {
+    if (document.visibilityState === 'visible' && navigator.onLine && this.currentState.pendingCount > 0) {
+      void this.sync();
+    }
+  };
+
   private startPeriodicSync() {
     if (this.syncInterval) return;
-    
     this.syncInterval = window.setInterval(() => {
       if (navigator.onLine && this.currentState.pendingCount > 0) {
-        this.sync();
+        void this.sync();
       }
     }, SYNC_INTERVAL);
   }
@@ -82,27 +109,22 @@ class OfflineService {
       clearInterval(this.syncInterval);
       this.syncInterval = null;
     }
-    // Nettoyer les listeners
     window.removeEventListener('online', this.handleOnline);
     window.removeEventListener('offline', this.handleOffline);
+    document.removeEventListener('visibilitychange', this.handleVisibilityChange);
   }
 
-  // Récupérer le statut actuel
   getState(): OfflineState {
-    return { ...this.currentState };
+    return { ...this.currentState, queuePreview: [...this.currentState.queuePreview] };
   }
 
-  // Vérifier si on est online
   isOnline(): boolean {
     return navigator.onLine;
   }
 
-  // S'abonner aux changements
   subscribe(listener: (state: OfflineState) => void): () => void {
     this.listeners.add(listener);
-    // Envoyer l'état actuel immédiatement
     listener(this.getState());
-    
     return () => {
       this.listeners.delete(listener);
     };
@@ -110,20 +132,53 @@ class OfflineService {
 
   private notifyListeners() {
     const state = this.getState();
-    this.listeners.forEach(listener => listener(state));
+    this.listeners.forEach((listener) => listener(state));
   }
 
-  private async updatePendingCount() {
+  private toQueueItem(report: PendingReport): OfflineQueueItem {
+    return {
+      localId: report.localId,
+      createdAtLocal: report.createdAtLocal,
+      syncStatus: report.syncStatus,
+      syncAttempts: report.syncAttempts,
+      maxSyncAttempts: report.maxSyncAttempts,
+      nextRetryAt: report.nextRetryAt,
+      lastError: report.lastError,
+    };
+  }
+
+  private getNearestRetryAt(reports: PendingReport[]): string | null {
+    const timestamps = reports
+      .map((report) => report.nextRetryAt)
+      .filter((value): value is string => Boolean(value))
+      .map((value) => Date.parse(value))
+      .filter((timestamp) => Number.isFinite(timestamp));
+    if (timestamps.length === 0) return null;
+    return new Date(Math.min(...timestamps)).toISOString();
+  }
+
+  private async updatePendingState() {
     try {
       const reports = await this.getPendingReports();
+      const now = Date.now();
       this.currentState.pendingCount = reports.length;
+      this.currentState.failedCount = reports.filter((report) => report.syncStatus === 'failed').length;
+      this.currentState.retryScheduledCount = reports.filter((report) => {
+        if (!report.nextRetryAt) return false;
+        const retryAt = Date.parse(report.nextRetryAt);
+        return Number.isFinite(retryAt) && retryAt > now;
+      }).length;
+      this.currentState.nextRetryAt = this.getNearestRetryAt(reports);
+      this.currentState.queuePreview = [...reports]
+        .sort((a, b) => Date.parse(b.createdAtLocal) - Date.parse(a.createdAtLocal))
+        .slice(0, QUEUE_PREVIEW_LIMIT)
+        .map((report) => this.toQueueItem(report));
       this.notifyListeners();
     } catch (error) {
-      console.error('Failed to update pending count:', error);
+      console.error('Failed to update pending state:', error);
     }
   }
 
-  // Récupérer tous les rapports en attente
   async getPendingReports(): Promise<PendingReport[]> {
     if (this.useFallback) {
       return offlineDB.getAllFallback();
@@ -131,22 +186,23 @@ class OfflineService {
     try {
       return await offlineDB.getAll();
     } catch (error) {
-      console.warn('IndexedDB failed, using fallback');
+      console.warn('IndexedDB failed, fallback to localStorage', error);
       this.useFallback = true;
       return offlineDB.getAllFallback();
     }
   }
 
-  // Sauvegarder un rapport en local (hors-ligne)
-  async saveReportLocal(reportData: any): Promise<string> {
-    const localId = `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    
+  async saveReportLocal(reportData: OfflineReportPayload): Promise<string> {
+    const localId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
     const newReport: PendingReport = {
       id: localId,
       localId,
       data: reportData,
       createdAtLocal: new Date().toISOString(),
-      syncAttempts: 0
+      syncAttempts: 0,
+      maxSyncAttempts: MAX_SYNC_ATTEMPTS,
+      syncStatus: 'pending',
+      nextRetryAt: null,
     };
 
     try {
@@ -156,20 +212,16 @@ class OfflineService {
         try {
           await offlineDB.add(newReport);
         } catch (error) {
-          // Si IndexedDB échoue (quota exceeded), fallback sur localStorage
-          console.warn('IndexedDB add failed, using fallback');
+          console.warn('IndexedDB add failed, fallback mode', error);
           await offlineDB.addFallback(newReport);
           this.useFallback = true;
         }
       }
-      
-      await this.updatePendingCount();
 
-      // Essayer de synchroniser immédiatement si online
+      await this.updatePendingState();
       if (navigator.onLine) {
-        this.sync();
+        void this.sync();
       }
-
       return localId;
     } catch (error) {
       console.error('Failed to save report locally:', error);
@@ -177,7 +229,6 @@ class OfflineService {
     }
   }
 
-  // Supprimer un rapport en attente
   private async removePendingReport(localId: string) {
     try {
       if (this.useFallback) {
@@ -187,35 +238,25 @@ class OfflineService {
           await offlineDB.delete(localId);
         } catch (error) {
           await offlineDB.deleteFallback(localId);
+          this.useFallback = true;
         }
       }
-      await this.updatePendingCount();
+      await this.updatePendingState();
     } catch (error) {
       console.error('Failed to remove pending report:', error);
     }
   }
 
-  // Mettre à jour un rapport (pour les tentatives de synchro)
   private async updatePendingReport(report: PendingReport) {
     try {
       if (this.useFallback) {
-        const reports = await offlineDB.getAllFallback();
-        const index = reports.findIndex(r => r.localId === report.localId);
-        if (index !== -1) {
-          reports[index] = report;
-          localStorage.setItem('siteflow_offline_pending', JSON.stringify(reports));
-        }
+        await offlineDB.updateFallback(report);
       } else {
         try {
           await offlineDB.update(report);
         } catch (error) {
-          // Fallback
-          const reports = await offlineDB.getAllFallback();
-          const index = reports.findIndex(r => r.localId === report.localId);
-          if (index !== -1) {
-            reports[index] = report;
-            localStorage.setItem('siteflow_offline_pending', JSON.stringify(reports));
-          }
+          await offlineDB.updateFallback(report);
+          this.useFallback = true;
         }
       }
     } catch (error) {
@@ -223,14 +264,41 @@ class OfflineService {
     }
   }
 
-  // Synchroniser les rapports en attente
-  async sync(): Promise<{ success: number; failed: number }> {
+  private computeRetryDelayMs(syncAttempts: number): number {
+    const exponent = Math.max(0, syncAttempts - 1);
+    const rawDelay = BASE_RETRY_DELAY_MS * 2 ** exponent;
+    const cappedDelay = Math.min(rawDelay, MAX_RETRY_DELAY_MS);
+    const jitter = Math.floor(cappedDelay * Math.random() * 0.25);
+    return cappedDelay + jitter;
+  }
+
+  private isRetryReady(report: PendingReport, now: number): boolean {
+    if (!report.nextRetryAt) return true;
+    const retryAt = Date.parse(report.nextRetryAt);
+    if (!Number.isFinite(retryAt)) return true;
+    return retryAt <= now;
+  }
+
+  private canSyncReport(report: PendingReport, now: number, force: boolean): boolean {
+    if (force) return true;
+    if (report.syncStatus === 'failed') return false;
+    return this.isRetryReady(report, now);
+  }
+
+  async sync(force = false): Promise<SyncResult> {
     if (this.currentState.isSyncing || !navigator.onLine) {
       return { success: 0, failed: 0 };
     }
 
-    const pending = await this.getPendingReports();
-    if (pending.length === 0) {
+    const pendingReports = await this.getPendingReports();
+    if (pendingReports.length === 0) {
+      return { success: 0, failed: 0 };
+    }
+
+    const now = Date.now();
+    const reportsToSync = pendingReports.filter((report) => this.canSyncReport(report, now, force));
+    if (reportsToSync.length === 0) {
+      await this.updatePendingState();
       return { success: 0, failed: 0 };
     }
 
@@ -240,72 +308,63 @@ class OfflineService {
     let success = 0;
     let failed = 0;
 
-    // Ne synchroniser que les rapports avec moins de MAX_SYNC_ATTEMPTS tentatives
-    const reportsToSync = pending.filter(r => r.syncAttempts < MAX_SYNC_ATTEMPTS);
-
     for (const report of reportsToSync) {
       try {
         await reportsApi.create(report.data);
         await this.removePendingReport(report.localId);
         success++;
-      } catch (error: any) {
-        // Incrémenter le compteur d'échecs
-        report.syncAttempts++;
-        report.lastError = error.message || 'Erreur inconnue';
-        failed++;
+      } catch (error: unknown) {
+        report.syncAttempts += 1;
+        report.lastAttemptAt = new Date().toISOString();
+        report.lastError = error instanceof Error ? error.message : 'Erreur inconnue';
 
-        // Sauvegarder le compteur d'échecs mis à jour
-        await this.updatePendingReport(report);
-
-        if (report.syncAttempts >= MAX_SYNC_ATTEMPTS) {
-          console.warn(`Rapport ${report.localId} a échoué ${MAX_SYNC_ATTEMPTS} fois, abandon temporaire`);
+        if (report.syncAttempts >= report.maxSyncAttempts) {
+          report.syncStatus = 'failed';
+          report.nextRetryAt = null;
+        } else {
+          report.syncStatus = 'retry';
+          const retryDelay = this.computeRetryDelayMs(report.syncAttempts);
+          report.nextRetryAt = new Date(Date.now() + retryDelay).toISOString();
         }
+
+        failed++;
+        await this.updatePendingReport(report);
       }
     }
 
     this.currentState.isSyncing = false;
     this.currentState.lastSync = new Date().toISOString();
-    await this.updatePendingCount();
+    await this.updatePendingState();
 
     return { success, failed };
   }
 
-  // Forcer une synchro manuelle
-  async forceSync(): Promise<{ success: number; failed: number }> {
-    return this.sync();
+  async forceSync(): Promise<SyncResult> {
+    return this.sync(true);
   }
 
-  // Récupérer tous les rapports (locaux + serveur si online)
   async getAllReports(serverReports: ApiReport[]): Promise<ApiReport[]> {
     const pending = await this.getPendingReports();
-    
-    // Convertir les rapports locaux en format ApiReport
-    const localReports: ApiReport[] = pending.map(p => ({
-      ...p.data,
-      id: p.localId,
-      createdAt: p.createdAtLocal,
-      extraWorks: p.data.extraWorks || []
+    const localReports: ApiReport[] = pending.map((pendingReport) => ({
+      ...pendingReport.data,
+      id: pendingReport.localId,
+      createdAt: pendingReport.createdAtLocal,
+      extraWorks: pendingReport.data.extraWorks || [],
     })) as ApiReport[];
 
-    // Fusionner et trier par date (plus récent d'abord)
-    return [...serverReports, ...localReports].sort((a, b) => {
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
+    return [...serverReports, ...localReports].sort(
+      (a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt),
+    );
   }
 
-  // Supprimer un rapport local
   async cancelLocalReport(localId: string): Promise<boolean> {
     const pending = await this.getPendingReports();
-    const exists = pending.some(r => r.localId === localId);
-    
-    if (exists) {
-      await this.removePendingReport(localId);
-      return true;
-    }
-    return false;
+    const exists = pending.some((report) => report.localId === localId);
+    if (!exists) return false;
+    await this.removePendingReport(localId);
+    return true;
   }
 
-  // Nettoyer tous les rapports en attente
   async clearAllPending(): Promise<void> {
     try {
       if (this.useFallback) {
@@ -315,9 +374,10 @@ class OfflineService {
           await offlineDB.clear();
         } catch (error) {
           localStorage.removeItem('siteflow_offline_pending');
+          this.useFallback = true;
         }
       }
-      await this.updatePendingCount();
+      await this.updatePendingState();
     } catch (error) {
       console.error('Failed to clear pending reports:', error);
     }
@@ -326,4 +386,4 @@ class OfflineService {
 
 // Singleton
 export const offlineService = new OfflineService();
-export type { OfflineState };
+export type { OfflineState, OfflineReportPayload, OfflineQueueItem };

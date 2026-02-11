@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
 import { Mail, Lock, User, ArrowRight, AlertCircle, Briefcase } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useAuth } from '../contexts/AuthContext';
+import { registerFormSchema, type RegisterFormValues } from '../schemas/auth';
+import { Button, SurfaceCard, TextField } from './ui';
 
 interface RegisterProps {
   onSwitchToLogin: () => void;
@@ -9,208 +13,128 @@ interface RegisterProps {
 
 export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    confirmPassword: '',
-    firstName: '',
-    lastName: '',
-    companyName: ''
-  });
+  const { register: createAccount } = useAuth();
   const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const { register } = useAuth();
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData(prev => ({
-      ...prev,
-      [e.target.name]: e.target.value
-    }));
-  };
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<RegisterFormValues>({
+    resolver: zodResolver(registerFormSchema),
+    defaultValues: {
+      email: '',
+      password: '',
+      confirmPassword: '',
+      firstName: '',
+      lastName: '',
+      companyName: '',
+    },
+  });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = async (values: RegisterFormValues) => {
     setError('');
-
-    if (formData.password !== formData.confirmPassword) {
-      setError('Les mots de passe ne correspondent pas');
-      return;
-    }
-
-    if (formData.password.length < 6) {
-      setError('Le mot de passe doit contenir au moins 6 caractères');
-      return;
-    }
-
-    setIsLoading(true);
-
     try {
-      await register({
-        email: formData.email,
-        password: formData.password,
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        companyName: formData.companyName
+      await createAccount({
+        email: values.email,
+        password: values.password,
+        firstName: values.firstName || undefined,
+        lastName: values.lastName || undefined,
+        companyName: values.companyName || undefined,
       });
-      navigate(`/register-success?email=${encodeURIComponent(formData.email)}`, { replace: true });
-    } catch (err: any) {
-      setError(err.message || 'Erreur lors de l\'inscription');
-    } finally {
-      setIsLoading(false);
+      navigate(`/register-success?email=${encodeURIComponent(values.email)}`, { replace: true });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erreur lors de l'inscription";
+      setError(message);
     }
   };
 
   return (
     <div className="view view--centered">
-      <div className="auth-container" style={{ maxWidth: '400px', margin: '0 auto', width: '100%' }}>
-        {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <div style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: '1rem',
-          }}>
-            <img
-              src="/logo.png"
-              alt="SiteFlow Pro"
-              style={{
-                width: '80px',
-                height: '80px',
-                objectFit: 'contain',
-                filter: 'drop-shadow(0 0 20px rgba(255, 183, 3, 0.3))'
-              }}
-            />
-          </div>
-          <h1 style={{ fontSize: '2rem', fontWeight: 'bold', fontFamily: 'var(--font-display)', color: 'var(--color-text-primary)' }}>SiteFlow Pro</h1>
-          <p style={{ color: 'var(--color-text-secondary)', marginTop: '0.5rem' }}>Créez votre compte professionnel</p>
+      <div className="auth-shell">
+        <div className="auth-brand">
+          <img src="/logo.png" alt="SiteFlow Pro" className="auth-brand__logo" />
+          <h1 className="auth-brand__title">SiteFlow Pro</h1>
+          <p className="auth-brand__subtitle">Créez votre compte professionnel</p>
         </div>
 
-        {/* Form */}
-        <div className="card">
+        <SurfaceCard>
           {error && (
-            <div style={{
-              marginBottom: '1rem',
-              padding: '0.75rem',
-              borderRadius: '8px',
-              background: 'rgba(239, 68, 68, 0.2)',
-              border: '1px solid rgba(239, 68, 68, 0.5)',
-              color: '#f87171',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              fontSize: '0.875rem'
-            }}>
-              <AlertCircle size={16} />
+            <div className="auth-alert auth-alert--error" role="alert">
+              <AlertCircle size={16} aria-hidden="true" />
               {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-              <div className="form-field">
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-text-secondary)', marginBottom: '0.25rem', fontSize: '0.875rem' }}>
-                  <User size={14} />
-                  Prénom
-                </label>
-                <input
-                  type="text"
-                  name="firstName"
-                  value={formData.firstName}
-                  onChange={handleChange}
-                  className="input"
-                  placeholder="Jean"
-                />
-              </div>
-
-              <div className="form-field">
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-text-secondary)', marginBottom: '0.25rem', fontSize: '0.875rem' }}>
-                  <User size={14} />
-                  Nom
-                </label>
-                <input
-                  type="text"
-                  name="lastName"
-                  value={formData.lastName}
-                  onChange={handleChange}
-                  className="input"
-                  placeholder="Dupont"
-                />
-              </div>
-            </div>
-
-            <div className="form-field">
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-text-secondary)', marginBottom: '0.25rem', fontSize: '0.875rem' }}>
-                <Briefcase size={14} />
-                Entreprise
-              </label>
-              <input
+          <form onSubmit={handleSubmit(onSubmit)} className="auth-form">
+            <div className="auth-form__grid">
+              <TextField
+                id="register-first-name"
                 type="text"
-                name="companyName"
-                value={formData.companyName}
-                onChange={handleChange}
-                className="input"
-                placeholder="Votre entreprise"
+                label="Prénom"
+                icon={User}
+                placeholder="Jean"
+                error={errors.firstName?.message}
+                {...register('firstName')}
+              />
+
+              <TextField
+                id="register-last-name"
+                type="text"
+                label="Nom"
+                icon={User}
+                placeholder="Dupont"
+                error={errors.lastName?.message}
+                {...register('lastName')}
               />
             </div>
 
-            <div className="form-field">
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-text-secondary)', marginBottom: '0.25rem', fontSize: '0.875rem' }}>
-                <Mail size={14} />
-                Email
-              </label>
-              <input
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                className="input"
-                placeholder="votre@email.com"
-                required
-              />
-            </div>
+            <TextField
+              id="register-company-name"
+              type="text"
+              label="Entreprise"
+              icon={Briefcase}
+              placeholder="Votre entreprise"
+              error={errors.companyName?.message}
+              {...register('companyName')}
+            />
 
-            <div className="form-field">
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-text-secondary)', marginBottom: '0.25rem', fontSize: '0.875rem' }}>
-                <Lock size={14} />
-                Mot de passe
-              </label>
-              <input
-                type="password"
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                className="input"
-                placeholder="••••••••"
-                required
-                minLength={6}
-              />
-              <p style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginTop: '0.25rem' }}>Minimum 6 caractères</p>
-            </div>
+            <TextField
+              id="register-email"
+              type="email"
+              label="Email"
+              icon={Mail}
+              placeholder="votre@email.com"
+              autoComplete="email"
+              error={errors.email?.message}
+              {...register('email')}
+            />
 
-            <div className="form-field">
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-text-secondary)', marginBottom: '0.25rem', fontSize: '0.875rem' }}>
-                <Lock size={14} />
-                Confirmer le mot de passe
-              </label>
-              <input
-                type="password"
-                name="confirmPassword"
-                value={formData.confirmPassword}
-                onChange={handleChange}
-                className="input"
-                placeholder="••••••••"
-                required
-              />
-            </div>
+            <TextField
+              id="register-password"
+              type="password"
+              label="Mot de passe"
+              icon={Lock}
+              placeholder="••••••••"
+              autoComplete="new-password"
+              hint="Minimum 6 caractères"
+              error={errors.password?.message}
+              {...register('password')}
+            />
 
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="btn btn--primary"
-              style={{ width: '100%', marginTop: '0.5rem' }}
-            >
-              {isLoading ? (
+            <TextField
+              id="register-confirm-password"
+              type="password"
+              label="Confirmer le mot de passe"
+              icon={Lock}
+              placeholder="••••••••"
+              autoComplete="new-password"
+              error={errors.confirmPassword?.message}
+              {...register('confirmPassword')}
+            />
+
+            <Button type="submit" loading={isSubmitting} className="w-full mt-2" aria-label="Créer mon compte">
+              {isSubmitting ? (
                 'Inscription...'
               ) : (
                 <>
@@ -218,30 +142,22 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
                   <ArrowRight size={18} />
                 </>
               )}
-            </button>
+            </Button>
           </form>
 
-          <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
-            <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
-              Déjà un compte ?{' '}
-              <button
-                onClick={onSwitchToLogin}
-                style={{ color: 'var(--color-primary)', fontWeight: '500', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
-              >
-                Se connecter
-              </button>
-            </p>
-          </div>
-        </div>
-
-        {/* Info */}
-        <div style={{ marginTop: '1.5rem', textAlign: 'center', fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
-          <p>
-            En créant un compte, vous acceptez nos conditions d'utilisation.
-            <br />
-            Vos données sont chiffrées et sécurisées.
+          <p className="auth-switch">
+            Déjà un compte ?{' '}
+            <button type="button" onClick={onSwitchToLogin} className="auth-switch__btn">
+              Se connecter
+            </button>
           </p>
-        </div>
+        </SurfaceCard>
+
+        <p className="auth-meta">
+          En créant un compte, vous acceptez nos conditions d'utilisation.
+          <br />
+          Vos données sont chiffrées et sécurisées.
+        </p>
       </div>
     </div>
   );
