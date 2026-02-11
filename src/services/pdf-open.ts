@@ -10,7 +10,7 @@ const isIOSDevice = () => {
 };
 
 export const openPendingPdfTab = (): PendingPdfTab => {
-  if (!isBrowser() || isIOSDevice()) return null;
+  if (!isBrowser()) return null;
   try {
     const tab = window.open('', '_blank');
     if (tab && tab.document) {
@@ -90,30 +90,38 @@ export const presentPdfBlob = ({
 
   const blobUrl = URL.createObjectURL(blob);
   let opened = false;
+  const revokeDelayMs = isIOSDevice() ? 600000 : 120000;
 
   // iOS WebKit may silently ignore blob navigation in some contexts.
-  // We try blob URL first, then fallback to a data URL, then an anchor open.
+  // We first target the pre-opened tab (opened on click), then fallback.
   if (isIOSDevice()) {
-    closePendingPdfTab(pendingTab);
-    const initialHref = window.location.href;
+    if (pendingTab && !pendingTab.closed) {
+      try {
+        pendingTab.location.href = blobUrl;
+        opened = true;
+      } catch {
+        // ignore
+      }
+    }
 
-    try {
-      window.location.assign(blobUrl);
-    } catch {
-      // ignore
+    if (!opened) {
+      try {
+        window.location.assign(blobUrl);
+      } catch {
+        // ignore
+      }
     }
 
     window.setTimeout(() => {
       if (!isBrowser()) return;
       if (document.visibilityState === 'hidden') return;
-      if (window.location.href !== initialHref) return;
 
       openBlobAsDataUrl(blob, () => {
         triggerAnchor({ href: blobUrl, filename, forceDownload: false });
       });
     }, 450);
 
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 120000);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), revokeDelayMs);
     return;
   }
 
@@ -168,5 +176,5 @@ export const presentPdfBlob = ({
     triggerAnchor({ href: blobUrl, filename, forceDownload: true });
   }
 
-  setTimeout(() => URL.revokeObjectURL(blobUrl), 120000);
+  setTimeout(() => URL.revokeObjectURL(blobUrl), revokeDelayMs);
 };
