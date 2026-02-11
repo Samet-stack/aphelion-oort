@@ -7,11 +7,10 @@ const validate = (schema) => (req, res, next) => {
     next();
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const issues = error.issues || error.errors || [];
       return res.status(400).json({
         success: false,
         message: 'Données invalides',
-        errors: issues.map((e) => ({
+        errors: error.errors.map(e => ({
           field: e.path.join('.'),
           message: e.message
         }))
@@ -81,7 +80,7 @@ export const updatePlanSchema = z.object({
 // Point schemas
 export const pointStatusEnum = z.enum(['a_faire', 'en_cours', 'termine']);
 export const pointCategoryEnum = z.enum([
-  'radiateur', 'electricite', 'defaut', 'validation', 
+  'radiateur', 'electricite', 'defaut', 'validation',
   'plomberie', 'maconnerie', 'menuiserie', 'autre'
 ]);
 
@@ -145,33 +144,12 @@ export const analyzeImageSchema = z.object({
   language: z.enum(['fr', 'en']).default('fr'),
 });
 
-export const compareImagesSchema = z
-  .object({
-    // Nouveau contrat
-    beforeImageBase64: z.string().min(1, 'Image avant requise').optional(),
-    afterImageBase64: z.string().min(1, 'Image après requise').optional(),
-    // Compatibilité legacy
-    beforeBase64: z.string().min(1, 'Image avant requise').optional(),
-    afterBase64: z.string().min(1, 'Image après requise').optional(),
-    mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']).default('image/jpeg'),
-    language: z.enum(['fr', 'en']).default('fr'),
-  })
-  .superRefine((data, ctx) => {
-    if (!data.beforeImageBase64 && !data.beforeBase64) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['beforeImageBase64'],
-        message: 'Image avant requise',
-      });
-    }
-    if (!data.afterImageBase64 && !data.afterBase64) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['afterImageBase64'],
-        message: 'Image après requise',
-      });
-    }
-  });
+export const compareImagesSchema = z.object({
+  beforeImageBase64: z.string().min(1, 'Image avant requise'),
+  afterImageBase64: z.string().min(1, 'Image après requise'),
+  mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']).default('image/jpeg'),
+  language: z.enum(['fr', 'en']).default('fr'),
+});
 
 // Export validation middlewares
 export const validateRegister = validate(registerSchema);

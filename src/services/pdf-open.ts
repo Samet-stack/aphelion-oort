@@ -19,9 +19,6 @@ const isMobileDevice = () => {
 
 export const openPendingPdfTab = (): PendingPdfTab => {
   if (!isBrowser()) return null;
-  // Mobile: don't pre-open a tab – new tabs stay in the background on
-  // mobile browsers so the user never sees the PDF. We navigate the
-  // current window instead (see presentPdfBlob).
   if (isMobileDevice()) return null;
   try {
     const tab = window.open('', '_blank');
@@ -45,23 +42,11 @@ export const closePendingPdfTab = (tab?: PendingPdfTab) => {
   }
 };
 
-const triggerAnchor = ({
-  href,
-  filename,
-  forceDownload,
-}: {
-  href: string;
-  filename: string;
-  forceDownload: boolean;
-}) => {
+const triggerDownloadAnchor = (href: string, filename: string) => {
   const a = document.createElement('a');
   a.href = href;
+  a.download = filename;
   a.rel = 'noopener';
-  if (forceDownload) {
-    a.download = filename;
-  } else {
-    a.target = '_blank';
-  }
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -81,26 +66,109 @@ const renderPdfInTab = (tab: Window, src: string, title: string) => {
   return true;
 };
 
-const openBlobAsDataUrl = (
-  blob: Blob,
-  onSuccess: (dataUrl: string) => void,
-  onError: () => void
-) => {
-  try {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = typeof reader.result === 'string' ? reader.result : '';
-      if (!dataUrl) {
-        onError();
-        return;
+/**
+ * Show the PDF in a fullscreen overlay inside the app.
+ * This is the only reliable approach on mobile PWAs (standalone mode)
+ * where window.open / window.location.assign / navigator.share all
+ * get captured by the PWA scope and redirect back to the app.
+ */
+const showMobileOverlay = (blob: Blob, blobUrl: string, filename: string) => {
+  // Container
+  const overlay = document.createElement('div');
+  overlay.id = 'pdf-viewer-overlay';
+  overlay.style.cssText = [
+    'position:fixed',
+    'top:0', 'left:0', 'right:0', 'bottom:0',
+    'z-index:99999',
+    'background:#000',
+    'display:flex',
+    'flex-direction:column',
+  ].join(';');
+
+  // Toolbar
+  const toolbar = document.createElement('div');
+  toolbar.style.cssText = [
+    'display:flex',
+    'align-items:center',
+    'justify-content:space-between',
+    'padding:10px 16px',
+    'background:#1a1a1a',
+    'flex-shrink:0',
+    'gap:8px',
+    `padding-top:max(10px, env(safe-area-inset-top))`,
+  ].join(';');
+
+  // Close button
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = 'Fermer';
+  closeBtn.style.cssText = [
+    'padding:8px 16px',
+    'background:#333',
+    'color:#fff',
+    'border:none',
+    'border-radius:8px',
+    'font-size:15px',
+    'font-weight:600',
+    'cursor:pointer',
+    '-webkit-tap-highlight-color:transparent',
+  ].join(';');
+  closeBtn.onclick = () => {
+    document.body.removeChild(overlay);
+    document.body.style.overflow = '';
+  };
+
+  // Filename label
+  const label = document.createElement('span');
+  label.textContent = filename.length > 28 ? filename.slice(0, 25) + '...' : filename;
+  label.style.cssText = 'color:#aaa;font-size:12px;flex:1;text-align:center;overflow:hidden;white-space:nowrap;';
+
+  // Share button (if available)
+  const shareBtn = document.createElement('button');
+  shareBtn.textContent = 'Partager';
+  shareBtn.style.cssText = [
+    'padding:8px 16px',
+    'background:#ffb703',
+    'color:#1a1a1a',
+    'border:none',
+    'border-radius:8px',
+    'font-size:15px',
+    'font-weight:600',
+    'cursor:pointer',
+    '-webkit-tap-highlight-color:transparent',
+  ].join(';');
+  shareBtn.onclick = async () => {
+    try {
+      const file = new File([blob], filename, { type: 'application/pdf' });
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file] });
+      } else {
+        triggerDownloadAnchor(blobUrl, filename);
       }
-      onSuccess(dataUrl);
-    };
-    reader.onerror = onError;
-    reader.readAsDataURL(blob);
-  } catch {
-    onError();
-  }
+    } catch {
+      triggerDownloadAnchor(blobUrl, filename);
+    }
+  };
+
+  toolbar.appendChild(closeBtn);
+  toolbar.appendChild(label);
+  toolbar.appendChild(shareBtn);
+
+  // PDF viewer (iframe)
+  const viewer = document.createElement('iframe');
+  viewer.src = blobUrl;
+  viewer.style.cssText = [
+    'flex:1',
+    'border:0',
+    'width:100%',
+    'background:#fff',
+  ].join(';');
+
+  overlay.appendChild(toolbar);
+  overlay.appendChild(viewer);
+
+  // Prevent background scroll
+  document.body.style.overflow = 'hidden';
+  document.body.appendChild(overlay);
 };
 
 export const presentPdfBlob = ({
@@ -119,42 +187,15 @@ export const presentPdfBlob = ({
   const revokeDelayMs = isMobileDevice() ? 600000 : 120000;
 
   // ---------------------------------------------------------------
-  // MOBILE (iOS + Android + others)
-  // On mobile browsers, window.open tabs stay in the background and
-  // the user never gets redirected to the PDF. Instead we navigate
-  // the current window directly. The user can tap "back" to return.
+  // MOBILE (PWA-safe)
+  // In standalone PWA mode, all external navigation (window.open,
+  // location.assign, anchor clicks) gets captured by the PWA scope
+  // and bounces the user back. The only reliable approach is to
+  // render the PDF inline in a fullscreen overlay.
   // ---------------------------------------------------------------
   if (isMobileDevice()) {
-    // Close any pre-opened tab that might have slipped through.
     closePendingPdfTab(pendingTab);
-
-    try {
-      window.location.assign(blobUrl);
-    } catch {
-      // ignore
-    }
-
-    // iOS WebKit sometimes silently ignores blob URL navigation for PDFs.
-    // Fallback: convert to a data URL and try again after a short delay.
-    if (isIOSDevice()) {
-      window.setTimeout(() => {
-        if (!isBrowser()) return;
-        openBlobAsDataUrl(
-          blob,
-          (dataUrl) => {
-            try {
-              window.location.assign(dataUrl);
-            } catch {
-              triggerAnchor({ href: blobUrl, filename, forceDownload: false });
-            }
-          },
-          () => {
-            triggerAnchor({ href: blobUrl, filename, forceDownload: false });
-          }
-        );
-      }, 450);
-    }
-
+    showMobileOverlay(blob, blobUrl, filename);
     setTimeout(() => URL.revokeObjectURL(blobUrl), revokeDelayMs);
     return;
   }
@@ -199,7 +240,7 @@ export const presentPdfBlob = ({
   }
 
   if (!opened) {
-    triggerAnchor({ href: blobUrl, filename, forceDownload: true });
+    triggerDownloadAnchor(blobUrl, filename);
   }
 
   setTimeout(() => URL.revokeObjectURL(blobUrl), revokeDelayMs);
