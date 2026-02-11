@@ -55,7 +55,25 @@ const triggerAnchor = ({
   document.body.removeChild(a);
 };
 
-const openBlobAsDataUrl = (blob: Blob, onError: () => void) => {
+const renderPdfInTab = (tab: Window, src: string, title: string) => {
+  if (!tab.document) return false;
+  tab.document.title = title;
+  tab.document.body.style.margin = '0';
+  tab.document.body.innerHTML = '';
+  const iframe = tab.document.createElement('iframe');
+  iframe.src = src;
+  iframe.style.border = '0';
+  iframe.style.width = '100vw';
+  iframe.style.height = '100vh';
+  tab.document.body.appendChild(iframe);
+  return true;
+};
+
+const openBlobAsDataUrl = (
+  blob: Blob,
+  onSuccess: (dataUrl: string) => void,
+  onError: () => void
+) => {
   try {
     const reader = new FileReader();
     reader.onload = () => {
@@ -64,11 +82,7 @@ const openBlobAsDataUrl = (blob: Blob, onError: () => void) => {
         onError();
         return;
       }
-      try {
-        window.location.assign(dataUrl);
-      } catch {
-        onError();
-      }
+      onSuccess(dataUrl);
     };
     reader.onerror = onError;
     reader.readAsDataURL(blob);
@@ -97,6 +111,14 @@ export const presentPdfBlob = ({
   if (isIOSDevice()) {
     if (pendingTab && !pendingTab.closed) {
       try {
+        opened = renderPdfInTab(pendingTab, blobUrl, filename);
+      } catch {
+        // ignore
+      }
+    }
+
+    if (!opened && pendingTab && !pendingTab.closed) {
+      try {
         pendingTab.location.href = blobUrl;
         opened = true;
       } catch {
@@ -114,11 +136,24 @@ export const presentPdfBlob = ({
 
     window.setTimeout(() => {
       if (!isBrowser()) return;
-      if (document.visibilityState === 'hidden') return;
 
-      openBlobAsDataUrl(blob, () => {
-        triggerAnchor({ href: blobUrl, filename, forceDownload: false });
-      });
+      openBlobAsDataUrl(
+        blob,
+        (dataUrl) => {
+          try {
+            if (pendingTab && !pendingTab.closed) {
+              renderPdfInTab(pendingTab, dataUrl, filename);
+              return;
+            }
+            window.location.assign(dataUrl);
+          } catch {
+            triggerAnchor({ href: blobUrl, filename, forceDownload: false });
+          }
+        },
+        () => {
+          triggerAnchor({ href: blobUrl, filename, forceDownload: false });
+        }
+      );
     }, 450);
 
     setTimeout(() => URL.revokeObjectURL(blobUrl), revokeDelayMs);
@@ -135,18 +170,7 @@ export const presentPdfBlob = ({
 
     if (!opened) {
       try {
-        if (pendingTab.document) {
-          pendingTab.document.title = filename;
-          pendingTab.document.body.style.margin = '0';
-          pendingTab.document.body.innerHTML = '';
-          const iframe = pendingTab.document.createElement('iframe');
-          iframe.src = blobUrl;
-          iframe.style.border = '0';
-          iframe.style.width = '100vw';
-          iframe.style.height = '100vh';
-          pendingTab.document.body.appendChild(iframe);
-          opened = true;
-        }
+        opened = renderPdfInTab(pendingTab, blobUrl, filename);
       } catch {
         // ignore
       }
