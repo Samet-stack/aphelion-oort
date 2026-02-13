@@ -4,10 +4,10 @@ import { ApiPlanPoint } from '../services/api';
 interface PinMarkerProps {
   point: ApiPlanPoint;
   isSelected: boolean;
-  onClick: (e: React.MouseEvent) => void;
+  onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => void;
 }
 
-export const PinMarker: React.FC<PinMarkerProps> = ({ point, isSelected, onClick }) => {
+const PinMarkerComponent: React.FC<PinMarkerProps> = ({ point, isSelected, onPointerUp }) => {
   const isProblem = point.status === 'a_faire' || point.category === 'defaut';
   const color = isProblem ? '#ef4444' : point.status === 'termine' ? '#22c55e' : '#f59e0b';
 
@@ -23,7 +23,8 @@ export const PinMarker: React.FC<PinMarkerProps> = ({ point, isSelected, onClick
         top: `${point.positionY}%`,
         animationDelay: animationDelayRef.current,
       }}
-      onClick={onClick}
+      onPointerDown={(e) => e.stopPropagation()}
+      onPointerUp={onPointerUp}
       title={`#${point.pointNumber} ${point.title}`}
     >
       <div className="pin-svg-wrapper -translate-x-1/2 -translate-y-full">
@@ -59,3 +60,10 @@ export const PinMarker: React.FC<PinMarkerProps> = ({ point, isSelected, onClick
     </div>
   );
 };
+
+export const PinMarker = React.memo(
+  PinMarkerComponent,
+  (prevProps, nextProps) =>
+    prevProps.isSelected === nextProps.isSelected &&
+    prevProps.point === nextProps.point
+);

@@ -18,6 +18,10 @@ export const OfflineIndicator: React.FC = () => {
   const [state, setState] = useState<OfflineState>(offlineService.getState());
   const [showDetails, setShowDetails] = useState(false);
   const [lastSyncResult, setLastSyncResult] = useState<{ success: number; failed: number } | null>(null);
+  const floatingStyle = {
+    left: 'calc(1rem + env(safe-area-inset-left, 0px))',
+    bottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))',
+  };
 
   useEffect(() => {
     const unsubscribe = offlineService.subscribe((nextState) => {
@@ -41,7 +45,7 @@ export const OfflineIndicator: React.FC = () => {
 
   if (state.isOnline && state.pendingCount === 0 && !state.isSyncing) {
     return (
-      <div className="fixed bottom-4 left-4 z-50">
+      <div className="fixed z-50" style={floatingStyle}>
         <div className="flex items-center gap-2 px-3 py-1.5 bg-[#111827]/80 border border-white/10 rounded-full text-xs text-[#7cfc8a]">
           <Cloud size={14} aria-hidden="true" />
           <span>Synchronisé</span>
@@ -52,7 +56,7 @@ export const OfflineIndicator: React.FC = () => {
 
   if (!state.isOnline) {
     return (
-      <div className="fixed bottom-4 left-4 z-50">
+      <div className="fixed z-50" style={floatingStyle}>
         <button
           type="button"
           className="flex items-center gap-2 px-3 py-2 bg-orange-500/20 border border-orange-500/50 rounded-lg text-sm text-orange-400 cursor-pointer pressable"
@@ -105,7 +109,7 @@ export const OfflineIndicator: React.FC = () => {
 
   if (state.isOnline && state.pendingCount > 0) {
     return (
-      <div className="fixed bottom-4 left-4 z-50">
+      <div className="fixed z-50" style={floatingStyle}>
         <button
           type="button"
           className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm cursor-pointer transition-all pressable ${
@@ -152,7 +156,7 @@ export const OfflineIndicator: React.FC = () => {
 
   if (state.isSyncing) {
     return (
-      <div className="fixed bottom-4 left-4 z-50">
+      <div className="fixed z-50" style={floatingStyle}>
         <div className="flex items-center gap-2 px-3 py-2 bg-[#ffb703]/20 border border-[#ffb703]/50 rounded-lg text-sm text-[#ffb703]">
           <RefreshCw size={16} className="animate-spin" />
           <span>Vérification...</span>

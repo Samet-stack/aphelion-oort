@@ -29,8 +29,15 @@ const useIsMobile = () => {
   useEffect(() => {
     const mql = window.matchMedia('(max-width: 720px)');
     const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
-    mql.addEventListener('change', handler);
-    return () => mql.removeEventListener('change', handler);
+
+    if (typeof mql.addEventListener === 'function') {
+      mql.addEventListener('change', handler);
+      return () => mql.removeEventListener('change', handler);
+    }
+
+    // Safari iOS < 14 fallback
+    mql.addListener(handler);
+    return () => mql.removeListener(handler);
   }, []);
 
   return isMobile;

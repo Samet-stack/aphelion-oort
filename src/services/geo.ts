@@ -78,7 +78,7 @@ export const getAddress = async (
         const res = await fetch(
             `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=fr`,
             { 
-                headers: { 'User-Agent': 'SiteFlowPro/1.0' },
+                headers: { Accept: 'application/json' },
                 signal: controller.signal
             }
         );

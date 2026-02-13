@@ -86,7 +86,8 @@ const fileToDataUrl = (file: File): Promise<string> => {
 };
 
 export const PlanPointFormFields: React.FC<PlanPointFormFieldsProps> = ({ onSave, onCancel, initialData, isEdit }) => {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState(initialData?.title || '');
   const [description, setDescription] = useState(initialData?.description || '');
   const [category, setCategory] = useState(initialData?.category || 'autre');
@@ -129,7 +130,14 @@ export const PlanPointFormFields: React.FC<PlanPointFormFieldsProps> = ({ onSave
             type="file"
             accept="image/*"
             capture="environment"
-            ref={inputRef}
+            ref={cameraInputRef}
+            onChange={handleFileChange}
+            className="hidden"
+          />
+          <input
+            type="file"
+            accept="image/*"
+            ref={fileInputRef}
             onChange={handleFileChange}
             className="hidden"
           />
@@ -138,7 +146,7 @@ export const PlanPointFormFields: React.FC<PlanPointFormFieldsProps> = ({ onSave
               <img src={photoDataUrl} alt="Preview" className="point-photo-preview" style={{ marginBottom: '12px' }} />
               <button
                 className="btn btn--ghost"
-                onClick={() => inputRef.current?.click()}
+                onClick={() => fileInputRef.current?.click()}
                 style={{ width: '100%' }}
               >
                 <Camera size={16} /> Changer la photo
@@ -146,10 +154,10 @@ export const PlanPointFormFields: React.FC<PlanPointFormFieldsProps> = ({ onSave
             </div>
           ) : (
             <div className="camera__actions" style={{ gap: '12px' }}>
-              <button type="button" className="btn btn--primary" onClick={() => inputRef.current?.click()}>
+              <button type="button" className="btn btn--primary" onClick={() => cameraInputRef.current?.click()}>
                 <Camera size={16} /> Prendre une photo
               </button>
-              <button type="button" className="btn btn--ghost" onClick={() => inputRef.current?.click()}>
+              <button type="button" className="btn btn--ghost" onClick={() => fileInputRef.current?.click()}>
                 <Upload size={16} /> Importer
               </button>
             </div>

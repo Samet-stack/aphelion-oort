@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Share2, MessageCircle, Mail, Link2, Check, Copy, QrCode, X, Smartphone } from 'lucide-react';
 import { generateShareId, createShareLink, generateShareMessage, generateQRCode, shareViaWhatsApp, shareViaEmail } from '../services/share';
 
@@ -17,12 +17,51 @@ export const ShareReportModal: React.FC<ShareReportProps> = ({ reportId, siteNam
     const [copied, setCopied] = useState(false);
     const [sent, setSent] = useState(false);
 
-    const shareId = generateShareId();
-    const shareLink = createShareLink(shareId);
-    const message = generateShareMessage(reportId, shareLink, siteName);
+    const shareId = useMemo(() => generateShareId(), []);
+    const shareLink = useMemo(() => createShareLink(shareId), [shareId]);
+    const message = useMemo(
+        () => generateShareMessage(reportId, shareLink, siteName),
+        [reportId, shareLink, siteName]
+    );
 
-    const handleCopyLink = () => {
-        navigator.clipboard.writeText(shareLink);
+    const legacyCopy = (text: string): boolean => {
+        const input = document.createElement('textarea');
+        input.value = text;
+        input.setAttribute('readonly', '');
+        input.style.position = 'fixed';
+        input.style.opacity = '0';
+        input.style.pointerEvents = 'none';
+        document.body.appendChild(input);
+        input.focus();
+        input.select();
+
+        let copied = false;
+        try {
+            copied = document.execCommand('copy');
+        } catch {
+            copied = false;
+        }
+
+        document.body.removeChild(input);
+        return copied;
+    };
+
+    const handleCopyLink = async () => {
+        let copiedOk = false;
+        try {
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(shareLink);
+                copiedOk = true;
+            }
+        } catch {
+            copiedOk = false;
+        }
+
+        if (!copiedOk) {
+            copiedOk = legacyCopy(shareLink);
+        }
+
+        if (!copiedOk) return;
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
@@ -51,7 +90,9 @@ export const ShareReportModal: React.FC<ShareReportProps> = ({ reportId, siteNam
                     url: shareLink
                 });
             } catch (err) {
-                // User cancelled
+                if (err instanceof DOMException && err.name === 'AbortError') {
+                    return;
+                }
             }
         }
     };
@@ -164,9 +205,10 @@ export const ShareReportModal: React.FC<ShareReportProps> = ({ reportId, siteNam
                                             value={shareLink}
                                             readOnly
                                         />
-                                        <button 
+                                        <button
+                                            type="button"
                                             className="btn btn--primary"
-                                            onClick={handleCopyLink}
+                                            onClick={() => { void handleCopyLink(); }}
                                         >
                                             {copied ? <><Check size={16} /> Copié</> : <><Copy size={16} /> Copier</>}
                                         </button>

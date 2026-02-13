@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Plus, X, PenTool, Check, AlertCircle } from 'lucide-react';
 
 export interface ExtraWorkItem {
@@ -35,7 +35,10 @@ export const ExtraWorkManager: React.FC<ExtraWorkProps> = ({
     const [category, setCategory] = useState('other');
     
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const signatureWrapperRef = useRef<HTMLDivElement>(null);
+    const activePointerIdRef = useRef<number | null>(null);
     const [isDrawing, setIsDrawing] = useState(false);
+    const [hasSignatureStroke, setHasSignatureStroke] = useState(false);
 
     const categories = [
         { id: 'peinture', label: 'Peinture' },
@@ -66,43 +69,119 @@ export const ExtraWorkManager: React.FC<ExtraWorkProps> = ({
         setShowForm(false);
     };
 
-    // Canvas signature
-    const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
+    const resizeSignatureCanvas = useCallback(() => {
         const canvas = canvasRef.current;
-        if (!canvas) return;
-        
-        setIsDrawing(true);
+        const wrapper = signatureWrapperRef.current;
+        if (!canvas || !wrapper) return;
+
+        const wrapperRect = wrapper.getBoundingClientRect();
+        const cssWidth = Math.max(280, Math.floor(wrapperRect.width));
+        const cssHeight = 150;
+        const ratio = Math.max(1, window.devicePixelRatio || 1);
+        const previousContent =
+            canvas.width > 0 && canvas.height > 0 ? canvas.toDataURL('image/png') : null;
+
+        canvas.style.width = `${cssWidth}px`;
+        canvas.style.height = `${cssHeight}px`;
+        canvas.width = Math.round(cssWidth * ratio);
+        canvas.height = Math.round(cssHeight * ratio);
+
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
-        
-        const rect = canvas.getBoundingClientRect();
-        const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-        const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-        
-        ctx.beginPath();
-        ctx.moveTo(clientX - rect.left, clientY - rect.top);
-        ctx.strokeStyle = '#000';
+
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, cssWidth, cssHeight);
+        ctx.strokeStyle = '#111827';
         ctx.lineWidth = 2;
         ctx.lineCap = 'round';
-    };
+        ctx.lineJoin = 'round';
 
-    const draw = (e: React.MouseEvent | React.TouchEvent) => {
-        if (!isDrawing) return;
+        if (!previousContent) return;
+        const image = new Image();
+        image.onload = () => {
+            ctx.drawImage(image, 0, 0, cssWidth, cssHeight);
+        };
+        image.src = previousContent;
+    }, []);
+
+    useEffect(() => {
+        if (!showSignature) return;
+
+        const setup = () => {
+            resizeSignatureCanvas();
+            setHasSignatureStroke(false);
+        };
+
+        const timeoutId = window.setTimeout(setup, 0);
+        window.addEventListener('resize', setup, { passive: true });
+        window.addEventListener('orientationchange', setup);
+
+        let observer: ResizeObserver | null = null;
+        if (typeof ResizeObserver !== 'undefined' && signatureWrapperRef.current) {
+            observer = new ResizeObserver(setup);
+            observer.observe(signatureWrapperRef.current);
+        }
+
+        return () => {
+            window.clearTimeout(timeoutId);
+            window.removeEventListener('resize', setup);
+            window.removeEventListener('orientationchange', setup);
+            observer?.disconnect();
+        };
+    }, [resizeSignatureCanvas, showSignature]);
+
+    const getPointerPosition = (e: React.PointerEvent<HTMLCanvasElement>) => {
         const canvas = canvasRef.current;
         if (!canvas) return;
-        
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-        
         const rect = canvas.getBoundingClientRect();
-        const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-        const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-        
-        ctx.lineTo(clientX - rect.left, clientY - rect.top);
+        return {
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top,
+            canvas,
+        };
+    };
+
+    // Canvas signature (pointer-based for iOS + Android consistency)
+    const startDrawing = (e: React.PointerEvent<HTMLCanvasElement>) => {
+        const pos = getPointerPosition(e);
+        if (!pos) return;
+
+        e.preventDefault();
+        pos.canvas.setPointerCapture(e.pointerId);
+        activePointerIdRef.current = e.pointerId;
+        setIsDrawing(true);
+        setHasSignatureStroke(true);
+
+        const ctx = pos.canvas.getContext('2d');
+        if (!ctx) return;
+
+        ctx.beginPath();
+        ctx.moveTo(pos.x, pos.y);
+    };
+
+    const draw = (e: React.PointerEvent<HTMLCanvasElement>) => {
+        if (!isDrawing || activePointerIdRef.current !== e.pointerId) return;
+        const pos = getPointerPosition(e);
+        if (!pos) return;
+
+        e.preventDefault();
+        const ctx = pos.canvas.getContext('2d');
+        if (!ctx) return;
+
+        ctx.lineTo(pos.x, pos.y);
         ctx.stroke();
     };
 
-    const stopDrawing = () => {
+    const stopDrawing = (e: React.PointerEvent<HTMLCanvasElement>) => {
+        if (activePointerIdRef.current !== e.pointerId) return;
+        e.preventDefault();
+        try {
+            e.currentTarget.releasePointerCapture(e.pointerId);
+        } catch {
+            // ignore
+        }
+        activePointerIdRef.current = null;
         setIsDrawing(false);
     };
 
@@ -111,10 +190,13 @@ export const ExtraWorkManager: React.FC<ExtraWorkProps> = ({
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+        setHasSignatureStroke(false);
     };
 
     const saveSignature = () => {
+        if (!hasSignatureStroke) return;
         const canvas = canvasRef.current;
         if (!canvas) return;
         const dataUrl = canvas.toDataURL('image/png');
@@ -306,19 +388,15 @@ export const ExtraWorkManager: React.FC<ExtraWorkProps> = ({
                             <p className="detail-sub" style={{ marginBottom: '16px' }}>
                                 Demandez au client de signer pour validation des travaux supplémentaires.
                             </p>
-                            <div className="signature-canvas-wrapper">
+                            <div ref={signatureWrapperRef} className="signature-canvas-wrapper">
                                 <canvas
                                     ref={canvasRef}
-                                    width={400}
-                                    height={150}
                                     className="signature-canvas"
-                                    onMouseDown={startDrawing}
-                                    onMouseMove={draw}
-                                    onMouseUp={stopDrawing}
-                                    onMouseLeave={stopDrawing}
-                                    onTouchStart={startDrawing}
-                                    onTouchMove={draw}
-                                    onTouchEnd={stopDrawing}
+                                    onPointerDown={startDrawing}
+                                    onPointerMove={draw}
+                                    onPointerUp={stopDrawing}
+                                    onPointerCancel={stopDrawing}
+                                    onPointerLeave={stopDrawing}
                                 />
                             </div>
                             <button type="button" className="link-btn" onClick={clearSignature} style={{ marginTop: '12px' }}>
@@ -327,7 +405,12 @@ export const ExtraWorkManager: React.FC<ExtraWorkProps> = ({
                         </div>
                         <div className="modal__footer">
                             <button type="button" className="btn btn--ghost" onClick={() => setShowSignature(false)}>Annuler</button>
-                            <button type="button" className="btn btn--primary" onClick={saveSignature}>
+                            <button
+                                type="button"
+                                className="btn btn--primary"
+                                onClick={saveSignature}
+                                disabled={!hasSignatureStroke}
+                            >
                                 <Check size={16} /> Valider la signature
                             </button>
                         </div>

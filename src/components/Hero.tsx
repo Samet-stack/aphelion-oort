@@ -62,20 +62,16 @@ export const Hero: React.FC<HeroProps> = ({ onStart, onHistory }) => {
             variants={containerVariants}
             initial="hidden"
             animate="visible"
-            style={{
-                background: 'linear-gradient(145deg, var(--bg-surface) 0%, var(--bg-page) 100%)',
-                border: '1px solid var(--border-light)'
-            }}
         >
             <div className="hero__main">
-                <div style={{ position: 'relative', zIndex: 2 }}>
-                    <motion.p variants={itemVariants} className="hero__eyebrow" style={{ color: 'var(--primary)' }}>
+                <div className="hero__content">
+                    <motion.p variants={itemVariants} className="hero__eyebrow">
                         Rapports instantanés
                     </motion.p>
                     <motion.h1 variants={itemVariants} className="hero__title">
                         Photo, analyse, PDF officiel<br />en quelques minutes.
                     </motion.h1>
-                    <motion.p variants={itemVariants} className="hero__copy" style={{ maxWidth: '600px' }}>
+                    <motion.p variants={itemVariants} className="hero__copy">
                         SiteFlow Pro automatise les rapports de chantier. Capturez une photo sur site,
                         laissez l'IA enrichir les métadonnées et obtenez un PDF propre, prêt à signer.
                     </motion.p>
@@ -86,7 +82,6 @@ export const Hero: React.FC<HeroProps> = ({ onStart, onHistory }) => {
                             whileTap={{ scale: 0.98 }}
                             className="btn btn--primary"
                             onClick={onStart}
-                            style={{ boxShadow: '0 4px 20px var(--primary-glow)' }}
                         >
                             <Map size={18} />
                             + Nouveau chantier
@@ -133,43 +128,41 @@ export const Hero: React.FC<HeroProps> = ({ onStart, onHistory }) => {
                     </motion.div>
                 </div>
 
-                <div className="w-full bg-slate-900/50 backdrop-blur-md border border-white/10 rounded-2xl overflow-hidden shadow-2xl ring-1 ring-white/5">
-                    {/* Header */}
-                    <div className="p-5 border-b border-white/5 bg-white/5 flex items-center justify-between">
+                <div className="hero-sites">
+                    <div className="hero-sites__header">
                         <div>
-                            <h3 className="text-lg font-bold text-white flex items-center gap-2 font-display">
-                                <Building2 size={20} className="text-amber-400" />
+                            <h3 className="hero-sites__title">
+                                <Building2 size={20} />
                                 Vos chantiers
                             </h3>
-                            <p className="text-slate-400 text-xs mt-1 font-medium tracking-wide uppercase">
+                            <p className="hero-sites__meta">
                                 {loadingSites ? 'Synchronisation...' : `${sites.length} Récents`}
                             </p>
                         </div>
-                        <div className="px-3 py-1.5 rounded-full bg-slate-800/80 border border-white/10 text-xs font-semibold text-slate-300 flex items-center gap-2 shadow-inner">
-                            <Layers size={14} className="text-amber-400" />
+                        <div className="hero-sites__counter">
+                            <Layers size={14} />
                             {totalPlans} plans
                         </div>
                     </div>
 
-                    {/* List */}
-                    <div className="divide-y divide-white/5">
+                    <div className="hero-sites__list">
                         {loadingSites && [...Array(3)].map((_, i) => (
-                            <div key={i} className="p-4 flex items-center gap-4 animate-pulse">
-                                <div className="w-12 h-12 rounded-xl bg-white/5" />
-                                <div className="flex-1 space-y-2">
-                                    <div className="h-4 w-1/3 bg-white/5 rounded" />
-                                    <div className="h-3 w-1/2 bg-white/5 rounded" />
+                            <div key={i} className="hero-sites__skeleton">
+                                <div className="hero-sites__skeleton-icon" />
+                                <div className="hero-sites__skeleton-lines">
+                                    <div className="hero-sites__skeleton-line hero-sites__skeleton-line--lg" />
+                                    <div className="hero-sites__skeleton-line hero-sites__skeleton-line--sm" />
                                 </div>
                             </div>
                         ))}
 
                         {!loadingSites && sites.length === 0 && (
-                            <div className="p-8 text-center flex flex-col items-center gap-3">
-                                <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center ring-1 ring-white/10">
-                                    <MapPin className="text-slate-500" />
+                            <div className="hero-sites__empty">
+                                <div className="hero-sites__empty-icon">
+                                    <MapPin />
                                 </div>
-                                <p className="text-slate-400 text-sm">Aucun chantier récent</p>
-                                <button onClick={onStart} className="text-amber-400 text-sm font-semibold hover:text-amber-300 transition-colors">
+                                <p>Aucun chantier récent</p>
+                                <button onClick={onStart} className="hero-sites__empty-link">
                                     Créer un nouveau chantier
                                 </button>
                             </div>
@@ -179,35 +172,35 @@ export const Hero: React.FC<HeroProps> = ({ onStart, onHistory }) => {
                             <button
                                 key={site.id}
                                 onClick={onStart}
-                                className="w-full p-4 flex items-center gap-4 hover:bg-white/5 transition-colors text-left group relative overflow-hidden"
+                                className="hero-sites__item"
                             >
-                                <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 ring-1 ring-white/10 overflow-hidden relative">
+                                <div className="hero-sites__item-logo">
                                     {branding.logoUrl ? (
                                         <img
                                             src={branding.logoUrl}
                                             alt="Site Logo"
-                                            className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"
+                                            className="hero-sites__item-logo-img"
                                         />
                                     ) : (
-                                        <Building2 size={24} className="text-amber-500" />
+                                        <Building2 size={24} />
                                     )}
                                 </div>
-                                <div className="flex-1 z-10">
-                                    <p className="font-semibold text-white group-hover:text-amber-400 transition-colors text-[0.95rem]">
+                                <div className="hero-sites__item-content">
+                                    <p className="hero-sites__item-name">
                                         {site.siteName}
                                     </p>
-                                    <div className="flex items-center gap-3 text-xs text-slate-400 mt-1">
-                                        <span className="flex items-center gap-1">
+                                    <div className="hero-sites__item-stats">
+                                        <span className="hero-sites__item-stat">
                                             <MapPin size={12} />
                                             {site.pointsCount} points
                                         </span>
-                                        <span className="flex items-center gap-1">
+                                        <span className="hero-sites__item-stat">
                                             <Layers size={12} />
                                             {site.plansCount} plans
                                         </span>
                                     </div>
                                 </div>
-                                <div className="text-slate-600 group-hover:text-amber-400 group-hover:translate-x-1 transition-all duration-300">
+                                <div className="hero-sites__item-arrow">
                                     <ArrowRight size={20} />
                                 </div>
                             </button>

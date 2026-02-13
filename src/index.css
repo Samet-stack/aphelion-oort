@@ -58,6 +58,11 @@
   /* Spacing */
   --header-height: 72px;
   --sidebar-width: 280px;
+  --app-vh: 100dvh;
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
 
   /* Performance Optimizations via Variables */
   --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
@@ -112,9 +117,16 @@
   box-sizing: border-box;
 }
 
+html,
+body,
+#root {
+  min-height: var(--app-vh);
+}
+
 body {
   margin: 0;
-  min-height: 100vh;
+  min-height: var(--app-vh);
+  /* Mobile viewport fix */
   font-family: var(--font-body);
   color: var(--text);
   background:
@@ -124,6 +136,8 @@ body {
     linear-gradient(180deg, #0b0e11 0%, #0e141b 100%);
   background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
+  /* Prevent pull-to-refresh on mobile if not needed, but be careful */
+  overscroll-behavior-y: none;
 }
 
 body::before {
@@ -236,7 +250,7 @@ select {
 }
 
 .app {
-  min-height: 100vh;
+  min-height: var(--app-vh);
   display: flex;
   flex-direction: column;
   padding: 0;
@@ -248,7 +262,11 @@ select {
 .app__header {
   width: 100%;
   max-width: none;
-  padding: 20px 24px;
+  padding:
+    calc(20px + var(--safe-area-top))
+    calc(24px + var(--safe-area-right))
+    20px
+    calc(24px + var(--safe-area-left));
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -396,12 +414,16 @@ select {
   margin-top: 0;
   /* Removed margin */
   /* Full bleed - clear */
-  padding: 0;
+  padding-right: var(--safe-area-right);
+  padding-bottom: var(--safe-area-bottom);
+  padding-left: var(--safe-area-left);
 }
 
 @media (min-width: 720px) {
   .app__main {
-    padding: 0;
+    padding-right: 0;
+    padding-bottom: 0;
+    padding-left: 0;
   }
 }
 
@@ -559,6 +581,11 @@ select {
 
 .app__footer {
   margin-top: 32px;
+  padding:
+    0
+    calc(16px + var(--safe-area-right))
+    calc(10px + var(--safe-area-bottom))
+    calc(16px + var(--safe-area-left));
   font-size: 0.75rem;
   color: var(--text-muted);
   letter-spacing: 0.1em;
@@ -836,12 +863,12 @@ select {
   display: flex;
   flex-direction: column;
   gap: 24px;
-  min-height: calc(100svh - var(--header-height) - 88px);
+  min-height: calc(var(--app-vh) - var(--header-height) - 88px);
 }
 
 @media (min-width: 720px) {
   .hero {
-    min-height: calc(100vh - var(--header-height) - 88px);
+    min-height: calc(var(--app-vh) - var(--header-height) - 88px);
   }
 }
 
@@ -2111,6 +2138,11 @@ select {
   cursor: crosshair;
   width: 100%;
   height: 150px;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  background: #fff;
 }
 
 /* Voice Recorder */
@@ -2529,13 +2561,24 @@ select {
 /* Plan Viewer */
 .plan-viewer {
   position: relative;
-  overflow: auto;
+  overflow: hidden;
   border-radius: 16px;
   border: 1px solid var(--stroke);
   background: rgba(11, 14, 17, 0.6);
   min-height: 200px;
   max-height: 40vh;
   cursor: crosshair;
+  touch-action: none;
+  overscroll-behavior: contain;
+}
+
+.plan-viewer__viewport {
+  width: 100%;
+  min-height: inherit;
+}
+
+.plan-viewer__content {
+  width: 100%;
 }
 
 @media (min-width: 720px) {
@@ -2564,6 +2607,8 @@ select {
   position: relative;
   display: inline-block;
   transform-origin: 0 0;
+  touch-action: none;
+  will-change: transform;
 }
 
 .plan-viewer__image {
@@ -2574,14 +2619,13 @@ select {
 }
 
 .plan-viewer__controls {
-  position: sticky;
+  position: absolute;
   top: 8px;
-  left: 100%;
-  float: right;
+  right: 8px;
   display: flex;
   gap: 4px;
   z-index: 10;
-  margin: 8px;
+  margin: 0;
 }
 
 .plan-viewer__controls .btn {
@@ -2716,7 +2760,7 @@ select {
     gap: 6px;
     margin: 6px 0 10px;
   }
-  
+
   .plan-tab {
     padding: 6px 10px;
     font-size: 0.85rem;
@@ -2729,7 +2773,7 @@ select {
     gap: 4px;
     margin: 4px 0 8px;
   }
-  
+
   .plan-tab {
     padding: 4px 8px;
     font-size: 0.8rem;
@@ -2778,19 +2822,19 @@ select {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  max-height: calc(100vh - var(--header-height) - 200px);
+  max-height: calc(var(--app-vh) - var(--header-height) - 200px);
   overflow-y: auto;
 }
 
 @media (max-height: 700px) {
   .plan-action {
-    max-height: calc(100vh - var(--header-height) - 120px);
+    max-height: calc(var(--app-vh) - var(--header-height) - 120px);
   }
 }
 
 @media (max-height: 500px) {
   .plan-action {
-    max-height: calc(100vh - var(--header-height) - 80px);
+    max-height: calc(var(--app-vh) - var(--header-height) - 80px);
   }
 }
 
@@ -2845,18 +2889,18 @@ select {
   gap: 12px;
   /* Allow scrolling within the board on small screens */
   overflow-y: auto;
-  max-height: calc(100vh - var(--header-height) - 280px);
+  max-height: calc(var(--app-vh) - var(--header-height) - 280px);
 }
 
 @media (max-height: 700px) {
   .plan-action-board {
-    max-height: calc(100vh - var(--header-height) - 200px);
+    max-height: calc(var(--app-vh) - var(--header-height) - 200px);
   }
 }
 
 @media (max-height: 500px) {
   .plan-action-board {
-    max-height: calc(100vh - var(--header-height) - 160px);
+    max-height: calc(var(--app-vh) - var(--header-height) - 160px);
   }
 }
 
@@ -2864,7 +2908,7 @@ select {
   .plan-action-board {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 14px;
-    max-height: calc(100vh - var(--header-height) - 240px);
+    max-height: calc(var(--app-vh) - var(--header-height) - 240px);
   }
 }
 
@@ -2896,19 +2940,19 @@ select {
   gap: 10px;
   padding: 12px;
   /* Scrollable column on small heights */
-  max-height: calc(100vh - var(--header-height) - 350px);
+  max-height: calc(var(--app-vh) - var(--header-height) - 350px);
   overflow-y: auto;
 }
 
 @media (max-height: 700px) {
   .plan-action-col__list {
-    max-height: calc(100vh - var(--header-height) - 280px);
+    max-height: calc(var(--app-vh) - var(--header-height) - 280px);
   }
 }
 
 @media (max-height: 500px) {
   .plan-action-col__list {
-    max-height: calc(100vh - var(--header-height) - 220px);
+    max-height: calc(var(--app-vh) - var(--header-height) - 220px);
   }
 }
 
@@ -3020,7 +3064,7 @@ select {
   gap: 0;
   transition: grid-template-columns 0.35s var(--ease-smooth);
   /* Prevent overflow on small viewports */
-  max-height: calc(100vh - var(--header-height) - 40px);
+  max-height: calc(var(--app-vh) - var(--header-height) - 40px);
   overflow: hidden;
 }
 
@@ -3028,7 +3072,7 @@ select {
 .plan-viewer-layout__main {
   min-width: 0;
   overflow-y: auto;
-  max-height: calc(100vh - var(--header-height) - 40px);
+  max-height: calc(var(--app-vh) - var(--header-height) - 40px);
 }
 
 @media (min-width: 721px) {
@@ -3054,21 +3098,21 @@ select {
   position: sticky;
   top: 90px;
   border-radius: 16px;
-  max-height: calc(100vh - 120px);
+  max-height: calc(var(--app-vh) - 120px);
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
 }
 
 /* Smaller heights for desktop panel */
 @media (max-height: 700px) {
   .plan-panel--desktop {
-    max-height: calc(100vh - 80px);
+    max-height: calc(var(--app-vh) - 80px);
     top: 60px;
   }
 }
 
 @media (max-height: 500px) {
   .plan-panel--desktop {
-    max-height: calc(100vh - 60px);
+    max-height: calc(var(--app-vh) - 60px);
     top: 40px;
     border-radius: 12px;
   }
@@ -3080,7 +3124,11 @@ select {
   top: 0;
   z-index: 100;
   border-radius: 0;
-  max-height: 100vh;
+  max-height: var(--app-vh);
+  padding-right: var(--safe-area-right);
+  padding-top: var(--safe-area-top);
+  padding-bottom: var(--safe-area-bottom);
+  padding-left: var(--safe-area-left);
 }
 
 /* Mobile backdrop */
@@ -3196,67 +3244,6 @@ select {
   background: rgba(255, 183, 3, 0.08);
 }
 
-/* ===== MOBILE PDF VIEWER ===== */
-.mobile-pdf-view {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-height: calc(100svh - var(--header-height) - 20px);
-}
-
-@media (min-width: 720px) {
-  .mobile-pdf-view {
-    min-height: calc(100vh - var(--header-height) - 28px);
-  }
-}
-
-.mobile-pdf-view__top {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 8px;
-  padding: 8px;
-  border: 1px solid var(--stroke);
-  border-radius: 14px;
-  background: rgba(11, 14, 17, 0.55);
-}
-
-.mobile-pdf-view__name {
-  color: var(--text-muted);
-  font-size: 0.82rem;
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.mobile-pdf-view__actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.mobile-pdf-view__error {
-  margin: 0;
-  color: #ff6b6b;
-  font-size: 0.82rem;
-}
-
-.mobile-pdf-view__frame {
-  width: 100%;
-  flex: 1;
-  min-height: 70svh;
-  border: 1px solid var(--stroke);
-  border-radius: 14px;
-  background: #fff;
-}
-
-@media (min-width: 720px) {
-  .mobile-pdf-view__frame {
-    min-height: 75vh;
-  }
-}
-
 /* Active marker on plan */
 .plan-marker--active {
   transform: translate(-50%, -50%) scale(1.3) !important;
@@ -3266,6 +3253,7 @@ select {
 
 /* Responsive: mobile panel gets full grid */
 @media (max-width: 720px) {
+
   .plan-viewer-layout,
   .plan-viewer-layout__main,
   .plan-action,
@@ -3289,9 +3277,8 @@ select {
   .plan-viewer {
     max-height: none;
     min-height: 220px;
-    overflow: auto;
-    -webkit-overflow-scrolling: touch;
-    touch-action: pan-x pan-y pinch-zoom;
+    overflow: hidden;
+    touch-action: none;
     cursor: default;
   }
 
@@ -3300,7 +3287,10 @@ select {
     touch-action: pan-y;
   }
 
-  .plan-viewer__canvas,
+  .plan-viewer__canvas {
+    touch-action: none;
+  }
+
   .plan-points-list__item,
   .plan-action-card {
     touch-action: manipulation;
@@ -3327,10 +3317,13 @@ select {
 
 /* Animation pulse pour l'analyse IA */
 @keyframes pulse {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 1;
     transform: scale(1);
   }
+
   50% {
     opacity: 0.7;
     transform: scale(1.05);
@@ -3552,6 +3545,93 @@ select {
 
 .fixed {
   position: fixed;
+}
+
+/* Mobile PDF View */
+.mobile-pdf-view {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: var(--bg-page);
+  display: flex;
+  flex-direction: column;
+  min-height: var(--app-vh);
+  gap: 10px;
+  padding:
+    calc(10px + var(--safe-area-top))
+    calc(12px + var(--safe-area-right))
+    calc(12px + var(--safe-area-bottom))
+    calc(12px + var(--safe-area-left));
+}
+
+.mobile-pdf-view__top {
+  padding: 10px 12px;
+  background: var(--bg-glass);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--stroke);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.mobile-pdf-view__name {
+  flex: 1;
+  font-weight: 600;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mobile-pdf-view__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.mobile-pdf-view__error {
+  background: var(--danger);
+  color: white;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  text-align: center;
+  border-radius: 12px;
+  margin: 0;
+}
+
+.mobile-pdf-view__content {
+  flex: 1;
+  position: relative;
+  background: #0b0e11;
+  border: 1px solid var(--stroke);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.mobile-pdf-view__frame {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: #fff;
+}
+
+.mobile-pdf-view__fallback {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--text-muted);
+  padding: 0 2px;
+  font-size: 0.85rem;
+}
+
+.mobile-pdf-view__fallback p {
+  margin: 0;
+}
+
+.mobile-pdf-view__fallback-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .bottom-6 {

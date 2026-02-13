@@ -111,22 +111,6 @@ export default defineConfig({
                             },
                         },
                     },
-                    {
-                        urlPattern: ({ request, url }) =>
-                            request.method === 'GET' && url.pathname.startsWith('/api/'),
-                        handler: 'NetworkFirst',
-                        options: {
-                            cacheName: 'siteflow-api-get',
-                            networkTimeoutSeconds: 5,
-                            expiration: {
-                                maxEntries: 80,
-                                maxAgeSeconds: 60 * 60,
-                            },
-                            cacheableResponse: {
-                                statuses: [0, 200],
-                            },
-                        },
-                    },
                 ],
             },
             manifest: {

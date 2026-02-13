@@ -10,7 +10,8 @@ interface CameraViewProps {
 }
 
 export const CameraView: React.FC<CameraViewProps> = ({ onCapture, onBack, selectedPlan }) => {
-    const inputRef = useRef<HTMLInputElement>(null);
+    const cameraInputRef = useRef<HTMLInputElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const [isDragging, setIsDragging] = useState(false);
     const [isOptimizing, setIsOptimizing] = useState(false);
     const [optimizationHint, setOptimizationHint] = useState<string | null>(null);
@@ -99,7 +100,15 @@ export const CameraView: React.FC<CameraViewProps> = ({ onCapture, onBack, selec
                     type="file"
                     accept="image/*"
                     capture="environment"
-                    ref={inputRef}
+                    ref={cameraInputRef}
+                    onChange={handleFileChange}
+                    className="hidden"
+                />
+
+                <input
+                    type="file"
+                    accept="image/*"
+                    ref={fileInputRef}
                     onChange={handleFileChange}
                     className="hidden"
                 />
@@ -114,7 +123,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onCapture, onBack, selec
                     onDrop={handleDrop}
                     onClick={() => {
                         if (!isOptimizing) {
-                            inputRef.current?.click();
+                            cameraInputRef.current?.click();
                         }
                     }}
                 >
@@ -132,7 +141,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onCapture, onBack, selec
                     <button
                         type="button"
                         className="btn btn--primary pressable"
-                        onClick={() => inputRef.current?.click()}
+                        onClick={() => cameraInputRef.current?.click()}
                         disabled={isOptimizing}
                     >
                         <Camera size={18} />
@@ -141,7 +150,7 @@ export const CameraView: React.FC<CameraViewProps> = ({ onCapture, onBack, selec
                     <button
                         type="button"
                         className="btn btn--ghost pressable"
-                        onClick={() => inputRef.current?.click()}
+                        onClick={() => fileInputRef.current?.click()}
                         disabled={isOptimizing}
                     >
                         <Upload size={18} />

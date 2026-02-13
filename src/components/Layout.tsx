@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { branding } from '../config/branding';
 import { useAuth } from '../contexts/AuthContext';
 import { LogOut, User } from 'lucide-react';
@@ -13,10 +13,35 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     const [logoError, setLogoError] = useState(false);
     const { isAuthenticated, user, logout } = useAuth();
     const showLogo = Boolean(branding.logoUrl) && !logoError;
+    const headerRef = useRef<HTMLElement | null>(null);
+
+    useEffect(() => {
+        const header = headerRef.current;
+        if (!header) return;
+
+        const updateHeaderHeight = () => {
+            document.documentElement.style.setProperty('--header-height', `${Math.round(header.offsetHeight)}px`);
+        };
+
+        updateHeaderHeight();
+        window.addEventListener('resize', updateHeaderHeight, { passive: true });
+
+        let observer: ResizeObserver | null = null;
+        if (typeof ResizeObserver !== 'undefined') {
+            observer = new ResizeObserver(updateHeaderHeight);
+            observer.observe(header);
+        }
+
+        return () => {
+            window.removeEventListener('resize', updateHeaderHeight);
+            observer?.disconnect();
+        };
+    }, []);
 
     return (
         <div className="app">
             <motion.header
+                ref={headerRef}
                 className="app__header"
                 role="banner"
                 initial={{ y: -20, opacity: 0 }}
@@ -26,29 +51,29 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                     // Styles moved to .app__header in index.css for better performance
                 }}
             >
-                <div className="flex items-center gap-3">
-                    <div className="relative w-12 h-12 flex items-center justify-center">
+                <div className="app-brand">
+                    <div className="app-brand__logo-wrap">
                         {showLogo ? (
-                            <div className="relative w-full h-full rounded-xl overflow-hidden bg-white/5 border border-white/10 shadow-lg ring-1 ring-white/5">
+                            <div className="app-brand__logo-shell">
                                 <img
                                     src={branding.logoUrl}
                                     alt={branding.companyName}
-                                    className="w-full h-full object-cover"
+                                    className="app-brand__logo-img"
                                     onError={() => setLogoError(true)}
                                 />
-                                <div className="absolute inset-0 bg-gradient-to-tr from-black/20 to-transparent pointer-events-none" />
+                                <div className="app-brand__logo-glow" />
                             </div>
                         ) : (
-                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/20 text-slate-900 font-bold font-display text-xl">
+                            <div className="app-brand__logo-fallback">
                                 SF
                             </div>
                         )}
                     </div>
-                    <div className="flex flex-col">
-                        <span className="font-display font-bold text-lg leading-tight tracking-tight text-white/90">
+                    <div className="app-brand__text">
+                        <span className="app-brand__name">
                             {branding.productName}
                         </span>
-                        <span className="text-[0.65rem] uppercase tracking-widest font-semibold text-amber-500/80">
+                        <span className="app-brand__company">
                             {branding.companyName}
                         </span>
                     </div>
@@ -57,7 +82,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <div className="status-row">
                     {isAuthenticated && user && <OfflineStatusDot />}
                     {isAuthenticated && user ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                        <div className="status-auth">
                             <div className="status-user" title={user.email}>
                                 <User size={20} color="var(--primary)" />
                                 <span className="status-user__name">{user.firstName || user.email}</span>
@@ -65,7 +90,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                             <button
                                 onClick={logout}
                                 className="btn btn--ghost btn--danger btn--sm btn--pill"
-                                style={{ border: '1px solid var(--border-light)' }}
                                 aria-label="Se déconnecter du compte"
                             >
                                 <LogOut size={16} />
@@ -82,12 +106,12 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             </motion.header>
 
             <main className="app__main" role="main">
-                <div className="app__surface" style={{ maxWidth: '100%', padding: 0 }}>
+                <div className="app__surface">
                     {children}
                 </div>
             </main>
 
-            <footer className="app__footer" style={{ borderTop: '1px solid var(--border-light)', color: 'var(--text-muted)' }}>
+            <footer className="app__footer">
                 {branding.productName} © 2026
             </footer>
 

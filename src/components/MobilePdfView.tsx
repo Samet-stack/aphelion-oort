@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowLeft, Download, Share2 } from 'lucide-react';
+import { ArrowLeft, Download, ExternalLink, Share2 } from 'lucide-react';
 
 interface MobilePdfViewProps {
   blobUrl: string;
@@ -25,18 +25,60 @@ export const MobilePdfView: React.FC<MobilePdfViewProps> = ({ blobUrl, filename,
     document.body.removeChild(a);
   };
 
+  const openInBrowser = () => {
+    try {
+      const tab = window.open(blobUrl, '_blank', 'noopener,noreferrer');
+      if (tab) return;
+    } catch {
+      // ignore
+    }
+
+    try {
+      window.location.assign(blobUrl);
+    } catch {
+      triggerDownload();
+    }
+  };
+
   const handleShare = async () => {
     setShareError(null);
     try {
       const response = await fetch(blobUrl);
       const blob = await response.blob();
       const file = new File([blob], filename, { type: 'application/pdf' });
-      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: filename });
+
+      if (navigator.share) {
+        const canShareFile = !navigator.canShare || navigator.canShare({ files: [file] });
+        if (canShareFile) {
+          try {
+            await navigator.share({ files: [file], title: filename });
+            return;
+          } catch (error) {
+            if (error instanceof DOMException && error.name === 'AbortError') {
+              return;
+            }
+          }
+        }
+
+        // iOS fallback when file sharing is unavailable.
+        try {
+          await navigator.share({ title: filename, text: filename });
+          return;
+        } catch (error) {
+          if (error instanceof DOMException && error.name === 'AbortError') {
+            return;
+          }
+        }
+
+        triggerDownload();
         return;
       }
+
       triggerDownload();
-    } catch {
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return;
+      }
       setShareError('Partage indisponible sur ce téléphone. Utilisez Télécharger.');
     }
   };
@@ -60,11 +102,25 @@ export const MobilePdfView: React.FC<MobilePdfViewProps> = ({ blobUrl, filename,
 
       {shareError && <p className="mobile-pdf-view__error">{shareError}</p>}
 
-      <iframe
-        className="mobile-pdf-view__frame"
-        src={blobUrl}
-        title={filename}
-      />
+      <div className="mobile-pdf-view__content">
+        <iframe
+          className="mobile-pdf-view__frame"
+          src={blobUrl}
+          title={filename}
+        />
+      </div>
+
+      <div className="mobile-pdf-view__fallback">
+        <p>Si le PDF ne s'affiche pas, utilisez un mode externe :</p>
+        <div className="mobile-pdf-view__fallback-actions">
+          <button type="button" className="btn btn--ghost btn--sm" onClick={openInBrowser}>
+            <ExternalLink size={16} /> Ouvrir dans le navigateur
+          </button>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={triggerDownload}>
+            <Download size={16} /> Télécharger
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

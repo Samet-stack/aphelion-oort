@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { ArrowLeft, Plus, Map, Trash2, ZoomIn, ZoomOut, FileText, Loader2, Upload, Camera, ChevronRight, ClipboardList, Search, Play, CheckCircle2, Building2, Layers, FilePlus } from 'lucide-react';
+import { TransformWrapper, TransformComponent, ReactZoomPanPinchContentRef, ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
 import { plansApi, sitesApi, ApiPlan, ApiPlanPoint, ApiPlanListItem, ApiSite, ApiSiteListItem } from '../services/api';
 import { PlanPointFormData } from './PlanPointForm';
 import { PlanPointPanel } from './PlanPointPanel';
@@ -117,9 +118,13 @@ export const PlanView: React.FC<PlanViewProps> = ({
   const [isDragging, setIsDragging] = useState(false);
 
   // Viewer
-  const [zoom, setZoom] = useState(1);
+  const [zoomPercent, setZoomPercent] = useState(100);
+  const [viewerTransformKey, setViewerTransformKey] = useState(0);
   const imageRef = useRef<HTMLImageElement>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
+  const transformRef = useRef<ReactZoomPanPinchContentRef | null>(null);
+  const gestureInProgressRef = useRef(false);
+  const lastGestureEndAtRef = useRef(0);
   type ViewerTab = 'PLAN' | 'ACTION';
   const [viewerTab, setViewerTab] = useState<ViewerTab>('PLAN');
 
@@ -162,8 +167,8 @@ export const PlanView: React.FC<PlanViewProps> = ({
     return Math.round((donePoints / totalPoints) * 100);
   }, [currentPlan]);
 
-  // Click tracking for distinguishing click vs drag
-  const mouseDownPos = useRef<{ x: number; y: number } | null>(null);
+  // Pointer tracking for distinguishing tap from pan gestures.
+  const pointerDownPos = useRef<{ pointerId: number; x: number; y: number } | null>(null);
 
   // Side panel
   type PanelMode = 'closed' | 'detail' | 'edit' | 'create';
@@ -256,7 +261,8 @@ export const PlanView: React.FC<PlanViewProps> = ({
         }
 
         setSubView('VIEWER');
-        setZoom(1);
+        setZoomPercent(100);
+        setViewerTransformKey((prev) => prev + 1);
         setViewerTab('PLAN');
         setActionQuery('');
         setActionCategory('all');
@@ -401,7 +407,8 @@ export const PlanView: React.FC<PlanViewProps> = ({
       });
       setCurrentPlan(plan);
       setSubView('VIEWER');
-      setZoom(1);
+      setZoomPercent(100);
+      setViewerTransformKey((prev) => prev + 1);
       setViewerTab('PLAN');
       setActionQuery('');
       setActionCategory('all');
@@ -423,18 +430,34 @@ export const PlanView: React.FC<PlanViewProps> = ({
     }
   };
 
-  // Viewer: click on plan to add point
-  const handleCanvasMouseDown = (e: React.MouseEvent) => {
-    mouseDownPos.current = { x: e.clientX, y: e.clientY };
-  };
-
-  const handleCanvasClick = useCallback((e: React.MouseEvent) => {
-    // Distinguish click from drag
-    if (mouseDownPos.current) {
-      const dx = Math.abs(e.clientX - mouseDownPos.current.x);
-      const dy = Math.abs(e.clientY - mouseDownPos.current.y);
-      if (dx > 5 || dy > 5) return; // was a drag
+  // Viewer: tap/click on plan to add a point.
+  const handleCanvasPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (e.pointerType === 'touch' && !e.isPrimary) {
+      pointerDownPos.current = null;
+      lastGestureEndAtRef.current = performance.now();
+      return;
     }
+    pointerDownPos.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY };
+  }, []);
+
+  const handleCanvasPointerCancel = useCallback(() => {
+    pointerDownPos.current = null;
+  }, []);
+
+  const handleCanvasPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    const down = pointerDownPos.current;
+    pointerDownPos.current = null;
+    if (!down || down.pointerId !== e.pointerId) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if ((e.target as HTMLElement).closest('[data-point-id]')) return;
+    if (gestureInProgressRef.current) return;
+    if (performance.now() - lastGestureEndAtRef.current < 160) return;
+
+    // Distinguish tap from pan.
+    const dx = Math.abs(e.clientX - down.x);
+    const dy = Math.abs(e.clientY - down.y);
+    if (dx > 8 || dy > 8) return;
 
     const img = imageRef.current;
     if (!img) return;
@@ -443,7 +466,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
     const posX = ((e.clientX - rect.left) / rect.width) * 100;
     const posY = ((e.clientY - rect.top) / rect.height) * 100;
 
-    // Clamp to valid range
+    // Clamp to valid range.
     if (posX < 0 || posX > 100 || posY < 0 || posY > 100) return;
 
     setClickPosition({ x: posX, y: posY });
@@ -452,7 +475,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
     setPanelMode('create');
   }, []);
 
-  const handleMarkerClick = (point: ApiPlanPoint, e: React.MouseEvent) => {
+  const handleMarkerPointerUp = (point: ApiPlanPoint, e: React.PointerEvent<HTMLDivElement>) => {
     e.stopPropagation();
     setSelectedPoint(point);
     setEditingPoint(null);
@@ -551,12 +574,32 @@ export const PlanView: React.FC<PlanViewProps> = ({
     setPanelMode('detail');
   };
 
+  const syncZoomPercent = useCallback((ref: ReactZoomPanPinchRef) => {
+    setZoomPercent(Math.round(ref.state.scale * 100));
+  }, []);
+
+  const beginGesture = useCallback(() => {
+    gestureInProgressRef.current = true;
+  }, []);
+
+  const endGesture = useCallback((ref: ReactZoomPanPinchRef) => {
+    gestureInProgressRef.current = false;
+    lastGestureEndAtRef.current = performance.now();
+    syncZoomPercent(ref);
+  }, [syncZoomPercent]);
+
+  const centerPointInViewer = useCallback((pointId: string) => {
+    const marker = document.querySelector(`[data-point-id="${pointId}"]`) as HTMLElement | null;
+    if (!marker || !transformRef.current) return;
+    const currentScale = transformRef.current.instance.transformState.scale;
+    transformRef.current.zoomToElement(marker, currentScale, 240, 'easeOut');
+  }, []);
+
   const handleFocusPoint = (point: ApiPlanPoint) => {
     // Switch to plan view to make the "subpage to the right" feel connected to the marker.
     setViewerTab('PLAN');
     window.setTimeout(() => {
-      const el = document.querySelector(`[data-point-id="${point.id}"]`) as HTMLElement | null;
-      el?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+      centerPointInViewer(point.id);
     }, 60);
   };
 
@@ -605,11 +648,10 @@ export const PlanView: React.FC<PlanViewProps> = ({
     if (viewerTab !== 'PLAN') return;
     const id = selectedPoint.id;
     const t = window.setTimeout(() => {
-      const el = document.querySelector(`[data-point-id="${id}"]`) as HTMLElement | null;
-      el?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+      centerPointInViewer(id);
     }, 30);
     return () => window.clearTimeout(t);
-  }, [selectedPoint, panelMode, viewerTab, subView]);
+  }, [centerPointInViewer, selectedPoint, panelMode, viewerTab, subView]);
 
   // PDF
   const handleGeneratePdf = async () => {
@@ -1130,43 +1172,77 @@ export const PlanView: React.FC<PlanViewProps> = ({
                   <>
                     {/* Plan viewer */}
                     <div className="plan-viewer" ref={viewerRef}>
-                      {/* Zoom controls */}
-                      <div className="plan-viewer__controls">
-                        <button type="button" className="btn btn--ghost" onClick={() => setZoom((z) => Math.min(z + 0.25, 4))} title="Zoom +">
-                          <ZoomIn size={18} />
-                        </button>
-                        <button type="button" className="btn btn--ghost" onClick={() => setZoom((z) => Math.max(z - 0.25, 0.5))} title="Zoom -">
-                          <ZoomOut size={18} />
-                        </button>
-                        <span className="zoom-indicator">
-                          {Math.round(zoom * 100)}%
-                        </span>
-                      </div>
-
-                      <div
-                        className="plan-viewer__canvas transform-zoom"
-                        style={{ transform: `scale(${zoom})` }}
-                        onMouseDown={handleCanvasMouseDown}
-                        onClick={handleCanvasClick}
+                      <TransformWrapper
+                        key={viewerTransformKey}
+                        ref={transformRef}
+                        initialScale={1}
+                        minScale={0.5}
+                        maxScale={4}
+                        centerOnInit
+                        limitToBounds
+                        wheel={{ step: 0.2 }}
+                        panning={{
+                          velocityDisabled: true,
+                          excluded: ['.pin-marker', '.plan-viewer__controls', '.plan-viewer__controls *'],
+                        }}
+                        pinch={{ step: 5, excluded: ['.pin-marker'] }}
+                        doubleClick={{ disabled: true }}
+                        onInit={syncZoomPercent}
+                        onPanningStart={beginGesture}
+                        onPinchingStart={beginGesture}
+                        onZoomStart={beginGesture}
+                        onZoomStop={endGesture}
+                        onPanningStop={endGesture}
+                        onPinchingStop={endGesture}
                       >
-                        <img
-                          ref={imageRef}
-                          src={currentPlan.imageDataUrl}
-                          alt="Plan"
-                          className="plan-viewer__image"
-                          draggable={false}
-                        />
+                        {({ zoomIn, zoomOut }) => (
+                          <>
+                            {/* Zoom controls */}
+                            <div className="plan-viewer__controls">
+                              <button type="button" className="btn btn--ghost" onClick={() => zoomIn(0.25)} title="Zoom +">
+                                <ZoomIn size={18} />
+                              </button>
+                              <button type="button" className="btn btn--ghost" onClick={() => zoomOut(0.25)} title="Zoom -">
+                                <ZoomOut size={18} />
+                              </button>
+                              <span className="zoom-indicator">
+                                {zoomPercent}%
+                              </span>
+                            </div>
 
-                        {/* Point markers */}
-                        {currentPlan.points.map((pt) => (
-                          <PinMarker
-                            key={pt.id}
-                            point={pt}
-                            isSelected={!!(selectedPoint?.id === pt.id && isPanelOpen)}
-                            onClick={(e) => handleMarkerClick(pt, e)}
-                          />
-                        ))}
-                      </div>
+                            <TransformComponent
+                              wrapperClass="plan-viewer__viewport"
+                              contentClass="plan-viewer__content"
+                              wrapperStyle={{ width: '100%' }}
+                            >
+                              <div
+                                className="plan-viewer__canvas"
+                                onPointerDown={handleCanvasPointerDown}
+                                onPointerUp={handleCanvasPointerUp}
+                                onPointerCancel={handleCanvasPointerCancel}
+                              >
+                                <img
+                                  ref={imageRef}
+                                  src={currentPlan.imageDataUrl}
+                                  alt="Plan"
+                                  className="plan-viewer__image"
+                                  draggable={false}
+                                />
+
+                                {/* Point markers */}
+                                {currentPlan.points.map((pt) => (
+                                  <PinMarker
+                                    key={pt.id}
+                                    point={pt}
+                                    isSelected={!!(selectedPoint?.id === pt.id && isPanelOpen)}
+                                    onPointerUp={(e) => handleMarkerPointerUp(pt, e)}
+                                  />
+                                ))}
+                              </div>
+                            </TransformComponent>
+                          </>
+                        )}
+                      </TransformWrapper>
                     </div>
 
                     <p className="hint-text">

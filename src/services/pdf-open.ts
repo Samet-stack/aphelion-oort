@@ -107,7 +107,7 @@ const renderPdfInTab = (tab: Window, src: string, title: string) => {
   iframe.src = src;
   iframe.style.border = '0';
   iframe.style.width = '100vw';
-  iframe.style.height = '100vh';
+  iframe.style.height = '100dvh';
   tab.document.body.appendChild(iframe);
   return true;
 };
