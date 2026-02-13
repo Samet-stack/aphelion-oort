@@ -11,7 +11,8 @@
     "lint": "eslint --no-eslintrc --config .eslintrc.cjs . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "test:api": "npm --prefix server run test -- --run",
-    "test:api:coverage": "npm --prefix server run test:coverage -- --run"
+    "test:api:coverage": "npm --prefix server run test:coverage -- --run",
+    "test": "vitest run"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

@@ -64,10 +64,15 @@ const drawSimpleHeader = (ctx: LayoutContext, leftText: string, rightText?: stri
 // CANVAS: RENDU DU PLAN AVEC MARQUEURS
 // ========================================
 const renderPlanWithMarkers = (plan: ApiPlan): Promise<string> => {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    if (!plan.imageDataUrl) {
+      resolve('');
+      return;
+    }
+
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    
+
     img.onload = () => {
       const canvas = document.createElement('canvas');
       const maxWidth = 2400;
@@ -101,7 +106,7 @@ const renderPlanWithMarkers = (plan: ApiPlan): Promise<string> => {
       resolve(canvas.toDataURL('image/jpeg', 0.92));
     };
     
-    img.onerror = () => resolve('');
+    img.onerror = () => reject(new Error('Plan image failed to load'));
     img.src = plan.imageDataUrl;
   });
 };
@@ -420,9 +425,14 @@ export const generatePlanPDFPremium = async (plan: ApiPlan): Promise<{ blob: Blo
   y = drawSectionTitle(doc, ctx.margin, y, "VUE D'ENSEMBLE DU PLAN", 65);
   
   // Image plan
-  const planImage = await renderPlanWithMarkers(plan);
-  
-  if (planImage) {
+  let planImage = '';
+  try {
+    planImage = await renderPlanWithMarkers(plan);
+  } catch {
+    // Ignore rendering failure; skip plan overview image.
+  }
+
+  if (planImage && planImage.length > 100) {
     const maxHeight = ctx.pageHeight - y - ctx.margin - 12;
     let imgHeight = 100;
     let imgWidth = ctx.contentWidth;
@@ -459,7 +469,7 @@ export const generatePlanPDFPremium = async (plan: ApiPlan): Promise<{ blob: Blo
     const legendX = imgX + imgWidth - legendW - 6;
     const legendY = y + imgHeight - 14;
     
-    setFill(doc, [...PALETTE.white, 0.95]);
+    setFill(doc, PALETTE.white);
     doc.roundedRect(legendX - 3, legendY - 3, legendW, 12, 2, 2, 'F');
     
     let lx = legendX;
@@ -841,55 +851,36 @@ export const generatePlanPDFPremium = async (plan: ApiPlan): Promise<{ blob: Blo
           doc.setLineWidth(0.4);
 
           if (scaledH <= boxH) {
-            // Fits in one shot.
+            // Fits in one shot - center vertically.
             setFill(doc, PALETTE.lighterGray);
             doc.roundedRect(imgX, imgY, boxW, boxH, 4, 4, 'F');
 
-            doc.saveGraphicsState();
-            try {
-              doc.roundedRect(imgX, imgY, boxW, boxH, 4, 4, null);
-              doc.clip();
-              const dy = imgY + (boxH - scaledH) / 2;
-              doc.addImage(point.photoDataUrl, format, imgX, dy, boxW, scaledH);
-            } finally {
-              doc.restoreGraphicsState();
-            }
+            const dy = imgY + (boxH - scaledH) / 2;
+            doc.addImage(point.photoDataUrl, format, imgX, dy, boxW, scaledH);
 
+            setDraw(doc, PALETTE.lightGray);
+            doc.setLineWidth(0.4);
             doc.roundedRect(imgX, imgY, boxW, boxH, 4, 4, 'S');
           } else {
-            // Too tall: split into top and bottom crops.
-            const gap = 6;
-            const segH = (boxH - gap) / 2;
-            const seg1Y = imgY;
-            const seg2Y = imgY + segH + gap;
-
-            // Background panels
+            // Too tall: show top portion with full width.
             setFill(doc, PALETTE.lighterGray);
-            doc.roundedRect(imgX, seg1Y, boxW, segH, 4, 4, 'F');
-            doc.roundedRect(imgX, seg2Y, boxW, segH, 4, 4, 'F');
+            doc.roundedRect(imgX, imgY, boxW, boxH, 4, 4, 'F');
 
-            // Top crop
-            doc.saveGraphicsState();
-            try {
-              doc.roundedRect(imgX, seg1Y, boxW, segH, 4, 4, null);
-              doc.clip();
-              doc.addImage(point.photoDataUrl, format, imgX, seg1Y, boxW, scaledH);
-            } finally {
-              doc.restoreGraphicsState();
-            }
-            doc.roundedRect(imgX, seg1Y, boxW, segH, 4, 4, 'S');
+            // Draw as much of the image as fits.
+            doc.addImage(point.photoDataUrl, format, imgX, imgY, boxW, scaledH);
 
-            // Bottom crop (align image bottom with segment bottom)
-            const bottomImgY = seg2Y - (scaledH - segH);
-            doc.saveGraphicsState();
-            try {
-              doc.roundedRect(imgX, seg2Y, boxW, segH, 4, 4, null);
-              doc.clip();
-              doc.addImage(point.photoDataUrl, format, imgX, bottomImgY, boxW, scaledH);
-            } finally {
-              doc.restoreGraphicsState();
-            }
-            doc.roundedRect(imgX, seg2Y, boxW, segH, 4, 4, 'S');
+            // Mask overflow with white rectangle at bottom.
+            setFill(doc, PALETTE.white);
+            doc.rect(imgX, imgY + boxH, boxW, scaledH, 'F');
+
+            setDraw(doc, PALETTE.lightGray);
+            doc.setLineWidth(0.4);
+            doc.roundedRect(imgX, imgY, boxW, boxH, 4, 4, 'S');
+
+            // Hint
+            setText(doc, PALETTE.gray);
+            doc.setFontSize(7);
+            doc.text('Photo complète: voir fiche du point', imgX + 4, imgY + boxH - 4);
           }
         } catch {
           // If rendering fails, keep the PDF export usable.

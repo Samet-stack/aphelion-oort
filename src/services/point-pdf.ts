@@ -362,7 +362,12 @@ export const generatePointPDF = async (
   const planAvailableH = pageHeight - y - footerReserve;
   const planBoxH = Math.max(minPlanH, Math.min(maxPlanH, planAvailableH));
   const aspect = planBoxW / planBoxH;
-  const planZoom = await renderPlanZoomWithInset(plan, point, { aspect });
+  let planZoom: string | null = null;
+  try {
+    planZoom = await renderPlanZoomWithInset(plan, point, { aspect });
+  } catch {
+    // ignore
+  }
 
   setFill(doc, palette.surfaceAlt);
   doc.rect(margin, y, planBoxW, planBoxH, 'F');

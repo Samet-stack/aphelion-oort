@@ -14,6 +14,8 @@ const PinMarkerComponent: React.FC<PinMarkerProps> = ({ point, isSelected, onPoi
   // Stable per marker instance to avoid flicker across rerenders.
   const animationDelayRef = React.useRef(`${Math.random() * 0.2}s`);
 
+  const num = String(point.pointNumber);
+
   return (
     <div
       className={`pin-marker animate-pin-pop ${isSelected ? 'pin-marker--active' : ''} ${isProblem ? 'pin-marker--problem' : ''}`}
@@ -27,35 +29,43 @@ const PinMarkerComponent: React.FC<PinMarkerProps> = ({ point, isSelected, onPoi
       onPointerUp={onPointerUp}
       title={`#${point.pointNumber} ${point.title}`}
     >
-      <div className="pin-svg-wrapper -translate-x-1/2 -translate-y-full">
+      <div className="pin-svg-wrapper">
         <svg
-          width="40"
-          height="40"
-          viewBox="0 0 40 40"
+          width="36"
+          height="46"
+          viewBox="0 0 36 46"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
           className="pin-svg"
         >
+          {/* Pin shape */}
           <path
-            d="M20 0C11.1634 0 4 7.16344 4 16C4 26.5 20 40 20 40C20 40 36 26.5 36 16C36 7.16344 28.8366 0 20 0Z"
+            d="M18 0C8.06 0 0 8.06 0 18C0 30 18 46 18 46C18 46 36 30 36 18C36 8.06 27.94 0 18 0Z"
             fill={color}
           />
-          <circle cx="20" cy="16" r="6" fill="#0f172a" fillOpacity="0.3" />
-          <circle cx="20" cy="16" r="3" fill="white" />
-          {isProblem && (
-            <path
-              d="M20 8V18"
-              stroke="white"
-              strokeWidth="2"
-              strokeLinecap="round"
-              opacity={0.8}
-            />
-          )}
+          {/* White stroke outline */}
+          <path
+            d="M18 1.5C8.89 1.5 1.5 8.89 1.5 18C1.5 28.8 18 44 18 44C18 44 34.5 28.8 34.5 18C34.5 8.89 27.11 1.5 18 1.5Z"
+            stroke="white"
+            strokeWidth="1.5"
+            fill="none"
+          />
+          {/* Inner circle */}
+          <circle cx="18" cy="17" r="11" fill="white" />
+          {/* Number */}
+          <text
+            x="18"
+            y="17"
+            textAnchor="middle"
+            dominantBaseline="central"
+            fill={color}
+            fontFamily="Arial, sans-serif"
+            fontWeight="800"
+            fontSize={num.length > 2 ? '11' : num.length > 1 ? '13' : '15'}
+          >
+            {num}
+          </text>
         </svg>
-        {/* Number Badge */}
-        <div className="pin-badge">
-          {point.pointNumber}
-        </div>
       </div>
     </div>
   );

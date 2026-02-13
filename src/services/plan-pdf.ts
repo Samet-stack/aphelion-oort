@@ -94,6 +94,7 @@ const renderPlanWithMarkers = (plan: ApiPlan): Promise<string> => {
 
       resolve(canvas.toDataURL('image/jpeg', 0.85));
     };
+    img.onerror = () => resolve('');
     img.src = plan.imageDataUrl;
   });
 };
@@ -188,7 +189,12 @@ export const generatePlanPDF = async (plan: ApiPlan): Promise<{ blob: Blob; file
   currentY += 10;
 
   // Rendre le plan avec marqueurs
-  const planImageWithMarkers = await renderPlanWithMarkers(plan);
+  let planImageWithMarkers = '';
+  try {
+    planImageWithMarkers = await renderPlanWithMarkers(plan);
+  } catch {
+    // ignore rendering failure
+  }
 
   const planImgWidth = contentWidth;
   const planImgMaxHeight = pageHeight - currentY - 30;
@@ -214,9 +220,15 @@ export const generatePlanPDF = async (plan: ApiPlan): Promise<{ blob: Blob; file
   doc.setLineWidth(0.5);
   doc.rect(margin, currentY, planImgWidth, planImgHeight, 'S');
 
-  try {
-    doc.addImage(planImageWithMarkers, 'JPEG', margin + 1, currentY + 1, planImgWidth - 2, planImgHeight - 2);
-  } catch {
+  if (planImageWithMarkers && planImageWithMarkers.length > 100) {
+    try {
+      doc.addImage(planImageWithMarkers, 'JPEG', margin + 1, currentY + 1, planImgWidth - 2, planImgHeight - 2);
+    } catch {
+      setTextColor(doc, palette.gray);
+      doc.setFontSize(10);
+      doc.text('Plan non disponible', margin + planImgWidth / 2 - 20, currentY + planImgHeight / 2);
+    }
+  } else {
     setTextColor(doc, palette.gray);
     doc.setFontSize(10);
     doc.text('Plan non disponible', margin + planImgWidth / 2 - 20, currentY + planImgHeight / 2);

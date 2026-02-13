@@ -728,7 +728,7 @@ body::after {
 
 .plan-viewer {
   border-color: rgba(255, 255, 255, 0.14);
-  background: radial-gradient(circle at 50% 0%, rgba(97, 242, 255, 0.12), rgba(11, 15, 24, 0.82) 55%);
+  background: radial-gradient(circle at 50% 0%, rgba(97, 242, 255, 0.08), rgba(11, 15, 24, 0.92) 55%);
 }
 
 .plan-viewer__controls .btn {
