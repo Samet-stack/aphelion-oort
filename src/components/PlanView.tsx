@@ -4,10 +4,9 @@ import { plansApi, ApiPlan, ApiPlanPoint, ApiPlanListItem } from '../services/ap
 import { PlanPointForm, PlanPointFormData } from './PlanPointForm';
 import { PlanPointDetail } from './PlanPointDetail';
 import { generatePlanPDF } from '../services/plan-pdf';
-
-interface PlanViewProps {
-  onBack: () => void;
-}
+import { toast } from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
 type SubView = 'LIST' | 'UPLOAD' | 'VIEWER';
 
@@ -60,7 +59,12 @@ const fileToDataUrl = (file: File, maxW = 2000, maxH = 2000, quality = 0.8): Pro
   });
 };
 
-export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
+import { useAuth } from '../contexts/AuthContext';
+
+export const PlanView: React.FC = () => {
+  const navigate = useNavigate();
+  const { offlineState, getCachedPlans, saveCachedPlan, getAllPlanPointsForPlan, savePlanPointOffline } = useAuth();
+
   // Sub-views
   const [subView, setSubView] = useState<SubView>('LIST');
 
@@ -81,7 +85,6 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
   const [isDragging, setIsDragging] = useState(false);
 
   // Viewer
-  const [zoom, setZoom] = useState(1);
   const imageRef = useRef<HTMLImageElement>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
 
@@ -101,13 +104,25 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
   // Load plans on mount
   useEffect(() => {
     loadPlans();
-  }, []);
+  }, [offlineState.isOnline]);
 
   const loadPlans = async () => {
     setLoadingPlans(true);
     try {
-      const data = await plansApi.getAll();
-      setPlans(data);
+      if (offlineState.isOnline) {
+        const data = await plansApi.getAll();
+        setPlans(data);
+      } else {
+        const cached = await getCachedPlans();
+        setPlans(cached.map((c: any) => ({
+          id: c.id,
+          siteName: c.siteName,
+          address: c.address,
+          pointsCount: c.pointsCount,
+          createdAt: c.updatedAt,
+          updatedAt: c.updatedAt
+        })));
+      }
     } catch (err) {
       console.error('Error loading plans:', err);
     } finally {
@@ -118,13 +133,44 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
   const openPlan = async (planId: string) => {
     setLoadingPlan(true);
     try {
-      const plan = await plansApi.getById(planId);
-      setCurrentPlan(plan);
+      if (offlineState.isOnline) {
+        const plan = await plansApi.getById(planId);
+
+        // Mettre en cache pour usage hors-ligne
+        await saveCachedPlan({
+          id: plan.id,
+          siteName: plan.siteName,
+          address: plan.address,
+          imageDataUrl: plan.imageDataUrl,
+          pointsCount: plan.points.length,
+          updatedAt: plan.updatedAt
+        });
+
+        // Fusionner avec les points créés localement (hors-ligne)
+        const combinedPoints = await getAllPlanPointsForPlan(plan.id, plan.points);
+        setCurrentPlan({ ...plan, points: combinedPoints });
+      } else {
+        const cachedPlans = await getCachedPlans();
+        const cached = cachedPlans.find((c: any) => c.id === planId);
+        if (!cached) throw new Error('Plan non disponible hors-ligne');
+
+        const localPoints = await getAllPlanPointsForPlan(planId, []);
+        setCurrentPlan({
+          id: cached.id,
+          siteName: cached.siteName,
+          address: cached.address,
+          imageDataUrl: cached.imageDataUrl,
+          pointsCount: localPoints.length,
+          points: localPoints,
+          createdAt: cached.updatedAt,
+          updatedAt: cached.updatedAt
+        } as ApiPlan);
+      }
+
       setSubView('VIEWER');
-      setZoom(1);
     } catch (err) {
       console.error('Error loading plan:', err);
-      alert('Erreur lors du chargement du plan.');
+      toast.error('Erreur lors du chargement du plan. Ce plan est peut-être indisponible hors-ligne.');
     } finally {
       setLoadingPlan(false);
     }
@@ -138,7 +184,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
       setPlans((prev) => prev.filter((p) => p.id !== planId));
     } catch (err) {
       console.error('Error deleting plan:', err);
-      alert('Erreur lors de la suppression.');
+      toast.error('Erreur lors de la suppression.');
     }
   };
 
@@ -167,14 +213,13 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
       });
       setCurrentPlan(plan);
       setSubView('VIEWER');
-      setZoom(1);
       // Reset upload form
       setUploadSiteName('');
       setUploadAddress('');
       setUploadImageDataUrl('');
     } catch (err) {
       console.error('Error creating plan:', err);
-      alert('Erreur lors de la creation du plan.');
+      toast.error('Erreur lors de la creation du plan.');
     } finally {
       setUploading(false);
     }
@@ -219,35 +264,67 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
     if (!currentPlan) return;
 
     if (editingPoint) {
-      // Update
+      // Update (requires online for now, simplified)
+      if (!offlineState.isOnline && !editingPoint.id.startsWith('local-')) {
+        toast.error("L'edition de points existants n'est pas encore disponible hors-ligne.");
+        return;
+      }
       try {
         const updated = await plansApi.updatePoint(currentPlan.id, editingPoint.id, data);
-        setCurrentPlan((prev) =>
-          prev ? { ...prev, points: prev.points.map((p) => (p.id === updated.id ? updated : p)) } : null
+        setCurrentPlan((prev: ApiPlan | null) =>
+          prev ? { ...prev, points: prev.points.map((p: ApiPlanPoint) => (p.id === updated.id ? updated : p)) } : null
         );
         setShowPointForm(false);
         setEditingPoint(null);
         setShowPointDetail(false);
       } catch (err) {
         console.error('Error updating point:', err);
-        alert('Erreur lors de la mise a jour.');
+        toast.error('Erreur lors de la mise a jour.');
       }
     } else if (clickPosition) {
       // Create
       try {
-        const newPoint = await plansApi.addPoint(currentPlan.id, {
-          positionX: clickPosition.x,
-          positionY: clickPosition.y,
-          ...data,
-        });
-        setCurrentPlan((prev) =>
-          prev ? { ...prev, points: [...prev.points, newPoint] } : null
-        );
+        if (offlineState.isOnline) {
+          const newPoint = await plansApi.addPoint(currentPlan.id, {
+            positionX: clickPosition.x,
+            positionY: clickPosition.y,
+            ...data,
+          });
+          setCurrentPlan((prev: ApiPlan | null) =>
+            prev ? { ...prev, points: [...prev.points, newPoint] } : null
+          );
+        } else {
+          // Hors-Ligne
+          const pointPayload = {
+            positionX: clickPosition.x,
+            positionY: clickPosition.y,
+            ...data,
+          };
+          const localId = await savePlanPointOffline(currentPlan.id, pointPayload);
+
+          // Generate a fake point for UI
+          const maxPointNumber = currentPlan.points.length > 0
+            ? Math.max(...currentPlan.points.map(p => p.pointNumber || 0))
+            : 0;
+
+          const localPoint: ApiPlanPoint = {
+            id: localId,
+            planId: currentPlan.id,
+            pointNumber: maxPointNumber + 1,
+            ...pointPayload,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          } as ApiPlanPoint;
+
+          setCurrentPlan((prev: ApiPlan | null) =>
+            prev ? { ...prev, points: [...prev.points, localPoint] } : null
+          );
+        }
         setShowPointForm(false);
         setClickPosition(null);
       } catch (err) {
         console.error('Error creating point:', err);
-        alert('Erreur lors de la creation du point.');
+        toast.error('Erreur lors de la creation du point.');
       }
     }
   };
@@ -256,14 +333,14 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
     if (!currentPlan) return;
     try {
       await plansApi.deletePoint(currentPlan.id, pointId);
-      setCurrentPlan((prev) =>
-        prev ? { ...prev, points: prev.points.filter((p) => p.id !== pointId) } : null
+      setCurrentPlan((prev: ApiPlan | null) =>
+        prev ? { ...prev, points: prev.points.filter((p: ApiPlanPoint) => p.id !== pointId) } : null
       );
       setShowPointDetail(false);
       setSelectedPoint(null);
     } catch (err) {
       console.error('Error deleting point:', err);
-      alert('Erreur lors de la suppression.');
+      toast.error('Erreur lors de la suppression.');
     }
   };
 
@@ -282,7 +359,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
       await generatePlanPDF(currentPlan);
     } catch (err) {
       console.error('Error generating PDF:', err);
-      alert('Erreur lors de la generation du PDF.');
+      toast.error('Erreur lors de la generation du PDF.');
     } finally {
       setGeneratingPdf(false);
     }
@@ -302,7 +379,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
     return (
       <div className="view">
         <div className="view__top">
-          <button onClick={onBack} className="link-btn">
+          <button onClick={() => navigate('/')} className="link-btn">
             <ArrowLeft size={16} /> Accueil
           </button>
         </div>
@@ -504,50 +581,65 @@ export const PlanView: React.FC<PlanViewProps> = ({ onBack }) => {
           </div>
 
           {/* Plan viewer */}
-          <div className="plan-viewer" ref={viewerRef}>
-            {/* Zoom controls */}
-            <div className="plan-viewer__controls">
-              <button className="btn btn--ghost" onClick={() => setZoom((z) => Math.min(z + 0.25, 4))} title="Zoom +">
-                <ZoomIn size={18} />
-              </button>
-              <button className="btn btn--ghost" onClick={() => setZoom((z) => Math.max(z - 0.25, 0.5))} title="Zoom -">
-                <ZoomOut size={18} />
-              </button>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', padding: '4px 8px' }}>
-                {Math.round(zoom * 100)}%
-              </span>
-            </div>
-
-            <div
-              className="plan-viewer__canvas"
-              style={{ transform: `scale(${zoom})`, transformOrigin: '0 0' }}
-              onMouseDown={handleCanvasMouseDown}
-              onClick={handleCanvasClick}
+          <div className="plan-viewer" ref={viewerRef} style={{ padding: 0, overflow: 'hidden' }}>
+            <TransformWrapper
+              initialScale={1}
+              minScale={0.5}
+              maxScale={4}
+              centerOnInit={true}
+              wheel={{ step: 0.1 }}
             >
-              <img
-                ref={imageRef}
-                src={currentPlan.imageDataUrl}
-                alt="Plan"
-                className="plan-viewer__image"
-                draggable={false}
-              />
+              {({ zoomIn, zoomOut, centerView }) => (
+                <>
+                  {/* Zoom controls overlay */}
+                  <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', gap: '8px', zIndex: 20 }}>
+                    <button className="btn btn--ghost" onClick={() => zoomIn()} title="Zoom +">
+                      <ZoomIn size={18} />
+                    </button>
+                    <button className="btn btn--ghost" onClick={() => zoomOut()} title="Zoom -">
+                      <ZoomOut size={18} />
+                    </button>
+                    <button className="btn btn--ghost" onClick={() => centerView()} title="Centrer">
+                      <Map size={18} />
+                    </button>
+                  </div>
 
-              {/* Point markers */}
-              {currentPlan.points.map((point) => (
-                <div
-                  key={point.id}
-                  className={`plan-marker plan-marker--${point.status}`}
-                  style={{
-                    left: `${point.positionX}%`,
-                    top: `${point.positionY}%`,
-                  }}
-                  onClick={(e) => handleMarkerClick(point, e)}
-                  title={`#${point.pointNumber} ${point.title}`}
-                >
-                  {point.pointNumber}
-                </div>
-              ))}
-            </div>
+                  <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
+                    <div
+                      className="plan-viewer__canvas"
+                      onMouseDown={handleCanvasMouseDown}
+                      onClick={handleCanvasClick}
+                      style={{ position: 'relative' }}
+                    >
+                      <img
+                        ref={imageRef}
+                        src={currentPlan.imageDataUrl}
+                        alt="Plan"
+                        className="plan-viewer__image"
+                        draggable={false}
+                        style={{ display: 'block', maxWidth: '100%', height: 'auto' }}
+                      />
+
+                      {/* Point markers */}
+                      {currentPlan.points.map((point) => (
+                        <div
+                          key={point.id}
+                          className={`plan-marker plan-marker--${point.status}`}
+                          style={{
+                            left: `${point.positionX}%`,
+                            top: `${point.positionY}%`,
+                          }}
+                          onClick={(e) => handleMarkerClick(point, e)}
+                          title={`#${point.pointNumber} ${point.title}`}
+                        >
+                          {point.pointNumber}
+                        </div>
+                      ))}
+                    </div>
+                  </TransformComponent>
+                </>
+              )}
+            </TransformWrapper>
           </div>
 
           <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '8px', textAlign: 'center' }}>

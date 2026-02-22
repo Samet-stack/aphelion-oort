@@ -1,12 +1,13 @@
 // Service de gestion du mode hors-ligne
 // Stockage local des rapports + synchro auto
 
-import { reportsApi, type ApiReport } from './api';
-import { offlineDB, type PendingReport } from './offline-db';
+import { reportsApi, plansApi, type ApiReport, type ApiPlanPoint } from './api';
+import { offlineDB, type PendingReport, type PendingPlanPoint, type CachedPlan } from './offline-db';
 
 interface OfflineState {
   isOnline: boolean;
-  pendingCount: number;
+  pendingCount: number; // For reports
+  pendingPointsCount: number; // For plan points
   isSyncing: boolean;
   lastSync: string | null;
 }
@@ -20,6 +21,7 @@ class OfflineService {
   private currentState: OfflineState = {
     isOnline: navigator.onLine,
     pendingCount: 0,
+    pendingPointsCount: 0,
     isSyncing: false,
     lastSync: null
   };
@@ -69,7 +71,7 @@ class OfflineService {
 
   private startPeriodicSync() {
     if (this.syncInterval) return;
-    
+
     this.syncInterval = window.setInterval(() => {
       if (navigator.onLine && this.currentState.pendingCount > 0) {
         this.sync();
@@ -102,7 +104,7 @@ class OfflineService {
     this.listeners.add(listener);
     // Envoyer l'état actuel immédiatement
     listener(this.getState());
-    
+
     return () => {
       this.listeners.delete(listener);
     };
@@ -116,7 +118,9 @@ class OfflineService {
   private async updatePendingCount() {
     try {
       const reports = await this.getPendingReports();
+      const points = await this.getPendingPlanPoints();
       this.currentState.pendingCount = reports.length;
+      this.currentState.pendingPointsCount = points.length;
       this.notifyListeners();
     } catch (error) {
       console.error('Failed to update pending count:', error);
@@ -137,10 +141,23 @@ class OfflineService {
     }
   }
 
+  // Récupérer tous les points de plan en attente
+  async getPendingPlanPoints(): Promise<PendingPlanPoint[]> {
+    if (this.useFallback) {
+      // Fallback simpliste, on pourrait gérer via localStorage aussi mais pas requis
+      return [];
+    }
+    try {
+      return await offlineDB.getAllPlanPoints();
+    } catch (error) {
+      return [];
+    }
+  }
+
   // Sauvegarder un rapport en local (hors-ligne)
   async saveReportLocal(reportData: any): Promise<string> {
     const localId = `local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    
+
     const newReport: PendingReport = {
       id: localId,
       localId,
@@ -162,7 +179,7 @@ class OfflineService {
           this.useFallback = true;
         }
       }
-      
+
       await this.updatePendingCount();
 
       // Essayer de synchroniser immédiatement si online
@@ -195,6 +212,41 @@ class OfflineService {
     }
   }
 
+  // == Plan Points Offline ==
+  async savePlanPointLocal(planId: string, pointData: any): Promise<string> {
+    const localId = `local-point-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const newPoint: PendingPlanPoint = {
+      id: localId,
+      localId,
+      planId,
+      data: pointData,
+      createdAtLocal: new Date().toISOString(),
+      syncAttempts: 0
+    };
+
+    if (this.useFallback) return localId;
+
+    try {
+      await offlineDB.addPlanPoint(newPoint);
+      await this.updatePendingCount();
+      if (navigator.onLine) this.sync();
+      return localId;
+    } catch (error) {
+      console.error('Failed to save plan point locally:', error);
+      throw new Error('Impossible de sauvegarder le point de plan localement');
+    }
+  }
+
+  private async removePendingPlanPoint(localId: string) {
+    if (this.useFallback) return;
+    try {
+      await offlineDB.deletePlanPoint(localId);
+      await this.updatePendingCount();
+    } catch (error) {
+      console.error('Failed to remove pending plan point:', error);
+    }
+  }
+
   // Mettre à jour un rapport (pour les tentatives de synchro)
   private async updatePendingReport(report: PendingReport) {
     try {
@@ -223,14 +275,26 @@ class OfflineService {
     }
   }
 
-  // Synchroniser les rapports en attente
+  // Mettre à jour un point de plan (pour les tentatives de synchro)
+  private async updatePendingPlanPoint(point: PendingPlanPoint) {
+    if (this.useFallback) return;
+    try {
+      await offlineDB.updatePlanPoint(point);
+    } catch (error) {
+      console.error('Failed to update pending plan point:', error);
+    }
+  }
+
+  // Synchroniser les rapports et points de plans en attente
   async sync(): Promise<{ success: number; failed: number }> {
     if (this.currentState.isSyncing || !navigator.onLine) {
       return { success: 0, failed: 0 };
     }
 
-    const pending = await this.getPendingReports();
-    if (pending.length === 0) {
+    const pendingReports = await this.getPendingReports();
+    const pendingPoints = await this.getPendingPlanPoints();
+
+    if (pendingReports.length === 0 && pendingPoints.length === 0) {
       return { success: 0, failed: 0 };
     }
 
@@ -240,26 +304,51 @@ class OfflineService {
     let success = 0;
     let failed = 0;
 
-    // Ne synchroniser que les rapports avec moins de MAX_SYNC_ATTEMPTS tentatives
-    const reportsToSync = pending.filter(r => r.syncAttempts < MAX_SYNC_ATTEMPTS);
+    const now = Date.now();
 
+    // 1. Synchro des rapports
+    const reportsToSync = pendingReports.filter(r =>
+      r.syncAttempts < MAX_SYNC_ATTEMPTS &&
+      (!r.nextSyncTime || r.nextSyncTime <= now)
+    );
     for (const report of reportsToSync) {
       try {
         await reportsApi.create(report.data);
         await this.removePendingReport(report.localId);
         success++;
       } catch (error: any) {
-        // Incrémenter le compteur d'échecs
         report.syncAttempts++;
         report.lastError = error.message || 'Erreur inconnue';
+
+        // Exponential backoff: Base 1 min, then 2, 4, 8, 16 mins
+        const minutesToWait = Math.pow(2, report.syncAttempts - 1);
+        report.nextSyncTime = now + minutesToWait * 60 * 1000;
+
         failed++;
-
-        // Sauvegarder le compteur d'échecs mis à jour
         await this.updatePendingReport(report);
+      }
+    }
 
-        if (report.syncAttempts >= MAX_SYNC_ATTEMPTS) {
-          console.warn(`Rapport ${report.localId} a échoué ${MAX_SYNC_ATTEMPTS} fois, abandon temporaire`);
-        }
+    // 2. Synchro des points de plan
+    const pointsToSync = pendingPoints.filter(p =>
+      p.syncAttempts < MAX_SYNC_ATTEMPTS &&
+      (!p.nextSyncTime || p.nextSyncTime <= now)
+    );
+    for (const point of pointsToSync) {
+      try {
+        await plansApi.addPoint(point.planId, point.data);
+        await this.removePendingPlanPoint(point.localId);
+        success++;
+      } catch (error: any) {
+        point.syncAttempts++;
+        point.lastError = error.message || 'Erreur inconnue';
+
+        // Exponential backoff
+        const minutesToWait = Math.pow(2, point.syncAttempts - 1);
+        point.nextSyncTime = now + minutesToWait * 60 * 1000;
+
+        failed++;
+        await this.updatePendingPlanPoint(point);
       }
     }
 
@@ -278,7 +367,7 @@ class OfflineService {
   // Récupérer tous les rapports (locaux + serveur si online)
   async getAllReports(serverReports: ApiReport[]): Promise<ApiReport[]> {
     const pending = await this.getPendingReports();
-    
+
     // Convertir les rapports locaux en format ApiReport
     const localReports: ApiReport[] = pending.map(p => ({
       ...p.data,
@@ -297,7 +386,7 @@ class OfflineService {
   async cancelLocalReport(localId: string): Promise<boolean> {
     const pending = await this.getPendingReports();
     const exists = pending.some(r => r.localId === localId);
-    
+
     if (exists) {
       await this.removePendingReport(localId);
       return true;
@@ -321,6 +410,50 @@ class OfflineService {
     } catch (error) {
       console.error('Failed to clear pending reports:', error);
     }
+  }
+
+  // == Plans Mis en Cache ==
+  async getCachedPlans(): Promise<CachedPlan[]> {
+    if (this.useFallback) return [];
+    try {
+      return await offlineDB.getAllCachedPlans();
+    } catch {
+      return [];
+    }
+  }
+
+  async saveCachedPlan(plan: CachedPlan) {
+    if (this.useFallback) return;
+    try {
+      await offlineDB.saveCachedPlan(plan);
+    } catch (error) {
+      console.error('Failed to cache plan:', error);
+    }
+  }
+
+  // Récupérer tous les points d'un plan (locaux + serveur si online)
+  async getAllPlanPointsForPlan(planId: string, serverPoints: ApiPlanPoint[]): Promise<ApiPlanPoint[]> {
+    const pendingPoints = await this.getPendingPlanPoints();
+    const localPointsForPlan = pendingPoints.filter(p => p.planId === planId);
+
+    // Convertir les points locaux en format ApiPlanPoint
+    const mappedLocalPoints: ApiPlanPoint[] = localPointsForPlan.map(p => ({
+      ...p.data,
+      id: p.localId,
+      planId: p.planId,
+      createdAt: p.createdAtLocal,
+      updatedAt: p.createdAtLocal, // Utilisé pour le tri
+    })) as ApiPlanPoint[];
+
+    // Fusionner et trier par date
+    return [...serverPoints, ...mappedLocalPoints].sort((a, b) => {
+      // Si disponible, on peut trier par pointNumber
+      const aNum = (a as any).pointNumber || 0;
+      const bNum = (b as any).pointNumber || 0;
+      if (aNum !== bNum) return aNum - bNum;
+
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
   }
 }
 

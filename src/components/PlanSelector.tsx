@@ -1,18 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Map, Plus, Loader2, FileText, ChevronRight } from 'lucide-react';
-import { plansApi, ApiPlan, ApiPlanListItem } from '../services/api';
+import { useNavigate } from 'react-router-dom';
+import { plansApi, ApiPlanListItem } from '../services/api';
 
-interface PlanSelectorProps {
-  onSelectPlan: (plan: ApiPlan) => void;
-  onBack: () => void;
-  onManagePlans: () => void;
-}
+import { useAuth } from '../contexts/AuthContext';
+import { useAppStore } from '../store/useAppStore';
 
-export const PlanSelector: React.FC<PlanSelectorProps> = ({ 
-  onSelectPlan, 
-  onBack, 
-  onManagePlans 
-}) => {
+export const PlanSelector: React.FC = () => {
+  const navigate = useNavigate();
+  const { setSelectedPlan } = useAppStore();
+  const { offlineState, getCachedPlans } = useAuth();
   const [plans, setPlans] = useState<ApiPlanListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -20,14 +17,28 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
 
   useEffect(() => {
     loadPlans();
-  }, []);
+  }, [offlineState.isOnline]);
 
   const loadPlans = async () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await plansApi.getAll();
-      setPlans(data);
+
+      if (offlineState.isOnline) {
+        const data = await plansApi.getAll();
+        setPlans(data);
+      } else {
+        const cached = await getCachedPlans();
+        // Convert CachedPlan to ApiPlanListItem format
+        setPlans(cached.map((c: any) => ({
+          id: c.id,
+          siteName: c.siteName,
+          address: c.address,
+          pointsCount: c.pointsCount,
+          createdAt: c.updatedAt,
+          updatedAt: c.updatedAt
+        })));
+      }
     } catch (err) {
       setError('Impossible de charger les plans');
     } finally {
@@ -38,11 +49,32 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
   const handleSelectPlan = async (planItem: ApiPlanListItem) => {
     try {
       setSelectedPlanId(planItem.id);
-      // Charger les détails complets du plan
-      const fullPlan = await plansApi.getById(planItem.id);
-      onSelectPlan(fullPlan);
+
+      if (offlineState.isOnline) {
+        const fullPlan = await plansApi.getById(planItem.id);
+        setSelectedPlan(fullPlan);
+        navigate('/camera');
+      } else {
+        const cached = await getCachedPlans();
+        const fullPlan = cached.find((c: any) => c.id === planItem.id);
+        if (fullPlan) {
+          setSelectedPlan({
+            id: fullPlan.id,
+            siteName: fullPlan.siteName,
+            address: fullPlan.address,
+            imageDataUrl: fullPlan.imageDataUrl,
+            points: [], // Will be hydrated in PlanView
+            pointsCount: fullPlan.pointsCount,
+            createdAt: fullPlan.updatedAt,
+            updatedAt: fullPlan.updatedAt
+          });
+          navigate('/camera');
+        } else {
+          throw new Error('Plan non mis en cache');
+        }
+      }
     } catch (err) {
-      setError('Impossible de charger le plan sélectionné');
+      setError('Impossible de charger le plan. Ce plan n\'est peut-être pas disponible hors ligne.');
       setSelectedPlanId(null);
     }
   };
@@ -51,7 +83,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
     return (
       <div className="view">
         <div className="view__top">
-          <button onClick={onBack} className="link-btn">
+          <button onClick={() => navigate(-1)} className="link-btn">
             <ArrowLeft size={16} /> Retour
           </button>
         </div>
@@ -66,7 +98,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
   return (
     <div className="view">
       <div className="view__top">
-        <button onClick={onBack} className="link-btn">
+        <button onClick={() => navigate(-1)} className="link-btn">
           <ArrowLeft size={16} /> Retour
         </button>
         <div className="stepper">
@@ -84,7 +116,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
               Vous devez d'abord choisir un chantier pour créer un rapport
             </p>
           </div>
-          <button className="btn btn--ghost" onClick={onManagePlans}>
+          <button className="btn btn--ghost" onClick={() => navigate('/plans')}>
             <Plus size={16} />
             Gérer les plans
           </button>
@@ -103,7 +135,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
             <p className="text-sm text-text-muted mb-6">
               Vous devez d'abord créer un plan de chantier avant de pouvoir faire un rapport
             </p>
-            <button className="btn btn--primary" onClick={onManagePlans}>
+            <button className="btn btn--primary" onClick={() => navigate('/plans')}>
               <Plus size={18} />
               Créer un nouveau chantier
             </button>
@@ -114,9 +146,8 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
               <div
                 key={plan.id}
                 onClick={() => handleSelectPlan(plan)}
-                className={`plan-card group cursor-pointer transition-all ${
-                  selectedPlanId === plan.id ? 'ring-2 ring-[#ffb703]' : ''
-                }`}
+                className={`plan-card group cursor-pointer transition-all ${selectedPlanId === plan.id ? 'ring-2 ring-[#ffb703]' : ''
+                  }`}
               >
                 <div className="plan-card__info">
                   <span className="plan-card__name">{plan.siteName}</span>
@@ -129,9 +160,9 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
                     <FileText size={12} />
                     {plan.pointsCount || 0} points
                   </span>
-                  <ChevronRight 
-                    size={20} 
-                    className="text-text-muted group-hover:text-[#ffb703] transition-colors" 
+                  <ChevronRight
+                    size={20}
+                    className="text-text-muted group-hover:text-[#ffb703] transition-colors"
                   />
                 </div>
               </div>
@@ -141,7 +172,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
 
         {plans.length > 0 && (
           <div className="mt-6 pt-6 border-t border-white/10">
-            <button className="btn btn--ghost w-full" onClick={onManagePlans}>
+            <button className="btn btn--ghost w-full" onClick={() => navigate('/plans')}>
               <Plus size={16} />
               Créer un nouveau chantier
             </button>

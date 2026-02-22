@@ -11,15 +11,15 @@ router.get('/csv', async (req, res) => {
   try {
     const userId = req.user.id;
     const { startDate, endDate } = req.query;
-    
+
     let dateFilter = '';
     const params = [userId];
-    
+
     if (startDate && endDate) {
       dateFilter = 'AND r.created_at BETWEEN ? AND ?';
       params.push(startDate, endDate + ' 23:59:59');
     }
-    
+
     // Récupérer tous les rapports avec leurs TS
     const reports = await query(
       `SELECT 
@@ -34,7 +34,7 @@ router.get('/csv', async (req, res) => {
        ORDER BY r.created_at DESC`,
       params
     );
-    
+
     // Générer CSV
     const headers = [
       'ID Rapport',
@@ -49,9 +49,9 @@ router.get('/csv', async (req, res) => {
       'Montant TS (€)',
       'Description'
     ];
-    
+
     const csvRows = [headers.join(';')];
-    
+
     for (const r of reports) {
       const row = [
         r.reportId,
@@ -68,13 +68,13 @@ router.get('/csv', async (req, res) => {
       ];
       csvRows.push(row.map(cell => `"${cell}"`).join(';'));
     }
-    
+
     const csv = csvRows.join('\n');
-    
+
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="rapports_${new Date().toISOString().split('T')[0]}.csv"`);
     res.send('\uFEFF' + csv); // BOM pour Excel
-    
+
   } catch (error) {
     console.error('Export CSV error:', error);
     res.status(500).json({
@@ -89,15 +89,15 @@ router.get('/excel', async (req, res) => {
   try {
     const userId = req.user.id;
     const { startDate, endDate } = req.query;
-    
+
     let dateFilter = '';
     const params = [userId];
-    
+
     if (startDate && endDate) {
       dateFilter = 'AND r.created_at BETWEEN ? AND ?';
       params.push(startDate, endDate + ' 23:59:59');
     }
-    
+
     // Données principales
     const reports = await query(
       `SELECT 
@@ -111,7 +111,7 @@ router.get('/excel', async (req, res) => {
        ORDER BY r.created_at DESC`,
       params
     );
-    
+
     // Travaux supplémentaires détaillés
     const extraWorks = await query(
       `SELECT 
@@ -123,7 +123,7 @@ router.get('/excel', async (req, res) => {
        ORDER BY ew.created_at DESC`,
       params
     );
-    
+
     // Statistiques
     const stats = await query(
       `SELECT 
@@ -135,7 +135,7 @@ router.get('/excel', async (req, res) => {
        WHERE user_id = ? ${dateFilter.replace(/r\.created_at/g, 'created_at')}`,
       params
     );
-    
+
     res.json({
       success: true,
       data: {
@@ -150,7 +150,7 @@ router.get('/excel', async (req, res) => {
         exportedAt: new Date().toISOString()
       }
     });
-    
+
   } catch (error) {
     console.error('Export Excel error:', error);
     res.status(500).json({
@@ -165,7 +165,7 @@ router.get('/report/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
-    
+
     // Vérifier que l'utilisateur a accès au rapport (propriétaire ou partagé)
     const report = await query(
       `SELECT r.* FROM reports r
@@ -173,19 +173,19 @@ router.get('/report/:id', async (req, res) => {
        WHERE (r.user_id = ? OR s.id IS NOT NULL) AND r.id = ?`,
       [userId, req.user.email, userId, id]
     );
-    
+
     if (!report || report.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'Rapport non trouvé.'
       });
     }
-    
+
     const extraWorks = await query(
       'SELECT * FROM extra_works WHERE report_id = ?',
       [id]
     );
-    
+
     res.json({
       success: true,
       data: {
@@ -193,7 +193,7 @@ router.get('/report/:id', async (req, res) => {
         extraWorks
       }
     });
-    
+
   } catch (error) {
     console.error('Export report error:', error);
     res.status(500).json({

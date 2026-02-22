@@ -29,6 +29,13 @@ interface AuthContextType {
   saveReportOffline: (reportData: Parameters<typeof offlineService.saveReportLocal>[0]) => Promise<string>;
   forceSync: () => Promise<{ success: number; failed: number }>;
   cancelLocalReport: (localId: string) => Promise<boolean>;
+
+  // Offline Plans
+  savePlanPointOffline: (planId: string, pointData: any) => Promise<string>;
+  cancelLocalPlanPoint: (localId: string) => Promise<boolean>;
+  getAllPlanPointsForPlan: (planId: string, serverPoints: any[]) => Promise<any[]>;
+  saveCachedPlan: (plan: any) => Promise<void>;
+  getCachedPlans: () => Promise<any[]>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -56,7 +63,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshReports = useCallback(async () => {
     try {
       let serverReports: ApiReport[] = [];
-      
+
       // Essayer de récupérer les rapports serveur si online
       if (offlineService.isOnline()) {
         try {
@@ -65,7 +72,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.error('Failed to fetch server reports:', error);
         }
       }
-      
+
       // Fusionner avec les rapports locaux
       const allReports = await offlineService.getAllReports(serverReports);
       setReports(allReports);
@@ -81,7 +88,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       // Essayer de récupérer les stats serveur si online
       let serverStats = { totalReports: 0, totalExtraWorks: 0, totalExtraValue: 0 };
-      
+
       if (offlineService.isOnline()) {
         try {
           const data: any = await reportsApi.getStats();
@@ -94,14 +101,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.error('Failed to fetch server stats:', error);
         }
       }
-      
+
       // Calculer les stats des rapports locaux
       const localReports = await offlineService.getPendingReports();
       const localExtraWorks = localReports.reduce((sum, r) => sum + (r.data.extraWorks?.length || 0), 0);
       const localExtraValue = localReports.reduce((sum, r) => {
         return sum + (r.data.extraWorks?.reduce((s: number, w: any) => s + (w.estimatedCost || 0), 0) || 0);
       }, 0);
-      
+
       // Fusionner
       setStats({
         totalReports: serverStats.totalReports + localReports.length,
@@ -170,7 +177,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await loadStats();
       return;
     }
-    
+
     // Sinon supprimer sur le serveur
     await reportsApi.delete(id);
     setReports(prev => prev.filter(r => r.id !== id));
@@ -201,6 +208,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return result;
   }, [refreshReports, loadStats]);
 
+  const savePlanPointOffline = useCallback(async (planId: string, pointData: any) => {
+    const localId = await offlineService.savePlanPointLocal(planId, pointData);
+    await loadStats();
+    return localId;
+  }, [loadStats]);
+
+  const cancelLocalPlanPoint = useCallback(async () => {
+    return false;
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -218,7 +235,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         offlineState,
         saveReportOffline,
         forceSync,
-        cancelLocalReport
+        cancelLocalReport,
+        savePlanPointOffline,
+        cancelLocalPlanPoint,
+        getAllPlanPointsForPlan: offlineService.getAllPlanPointsForPlan.bind(offlineService),
+        saveCachedPlan: offlineService.saveCachedPlan.bind(offlineService),
+        getCachedPlans: offlineService.getCachedPlans.bind(offlineService)
       }}
     >
       {children}

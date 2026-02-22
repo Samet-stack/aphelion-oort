@@ -4,19 +4,14 @@ import { generateDescription } from '../services/ai';
 import { getAddress, getLocation, LocationData } from '../services/geo';
 import { generatePremiumPDF } from '../services/pdf-premium';
 import { useAuth } from '../contexts/AuthContext';
-import { reportsApi, ApiPlan } from '../services/api';
+import { reportsApi } from '../services/api';
 import { generateIntegrityProof, type IntegrityProof, generateCertificateText } from '../services/crypto';
 import { ExtraWorkManager, type ExtraWorkItem } from './ExtraWork';
 import { ShareReportModal } from './ShareReport';
 import { VoiceRecorderComponent } from './VoiceRecorder';
 import { branding } from '../config/branding';
-
-interface ReportViewProps {
-    imageFile: File;
-    selectedPlan: ApiPlan;
-    onBack: () => void;
-    onReset: () => void;
-}
+import { useNavigate } from 'react-router-dom';
+import { useAppStore } from '../store/useAppStore';
 
 type ReportData = {
     dateLabel: string;
@@ -98,7 +93,9 @@ const formatReportId = (date: Date) => {
     return `SF-${stamp}-${time}-${random}`;
 };
 
-export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan, onBack, onReset }) => {
+export const ReportView: React.FC = () => {
+    const navigate = useNavigate();
+    const { capturedImage, selectedPlan, resetApp } = useAppStore();
     const { refreshReports, saveReportOffline } = useAuth();
     const [analyzing, setAnalyzing] = useState(true);
     const [analysisStage, setAnalysisStage] = useState(0);
@@ -108,26 +105,32 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
     const [downloadState, setDownloadState] = useState<'idle' | 'loading' | 'done'>('idle');
     const [error, setError] = useState<string | null>(null);
     const [infoMessage, setInfoMessage] = useState<string | null>(null);
-    
+
     // Pilier 2: Intégrité
     const [integrityProof, setIntegrityProof] = useState<IntegrityProof | null>(null);
-    
+
     // Pilier 1: Travaux Supp
     const [extraWorks, setExtraWorks] = useState<ExtraWorkItem[]>([]);
     const [clientSignature, setClientSignature] = useState<string>('');
-    
+
     // Pilier 4: Partage
     const [showShare, setShowShare] = useState(false);
-    
+
     // Pilier 3: Dictaphone
     const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
-    
+
     // Champs métier - pré-remplis avec les infos du plan
-    const [siteName, setSiteName] = useState(selectedPlan.siteName || '');
+    const [siteName, setSiteName] = useState(selectedPlan?.siteName || '');
     const [operatorName, setOperatorName] = useState('');
     const [clientName, setClientName] = useState('');
     const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
     const [category, setCategory] = useState<'safety' | 'progress' | 'anomaly' | 'other'>('other');
+
+    useEffect(() => {
+        if (!capturedImage || !selectedPlan) {
+            navigate('/select-plan');
+        }
+    }, [capturedImage, selectedPlan, navigate]);
 
     const progress = useMemo(() => {
         if (!analyzing) {
@@ -138,8 +141,10 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
     }, [analysisStage, analyzing]);
 
     useEffect(() => {
+        if (!capturedImage) return;
+
         let active = true;
-        const url = URL.createObjectURL(imageFile);
+        const url = URL.createObjectURL(capturedImage);
         setImageUrl(url);
         setAnalyzing(true);
         setAnalysisStage(0);
@@ -159,7 +164,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
             try {
                 const [location, aiDescription] = await Promise.all([
                     getLocation(),
-                    generateDescription(imageFile),
+                    generateDescription(capturedImage),
                 ]);
                 const address = await getAddress(location.lat, location.lng, location.source);
                 const now = new Date();
@@ -171,10 +176,10 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
                     location.lat === null || location.lng === null
                         ? 'Non capturees'
                         : `${formatCoordinate(location.lat, 'N', 'S')} · ${formatCoordinate(
-                              location.lng,
-                              'E',
-                              'W'
-                          )}`;
+                            location.lng,
+                            'E',
+                            'W'
+                        )}`;
 
                 if (!active) {
                     return;
@@ -194,7 +199,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
                 setDescription(aiDescription);
 
                 // Pilier 2: Générer preuve d'intégrité
-                const imageData = await fileToDataUrl(imageFile, {
+                const imageData = await fileToDataUrl(capturedImage, {
                     maxWidth: 800,
                     maxHeight: 600,
                     quality: 0.7,
@@ -233,7 +238,9 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
             URL.revokeObjectURL(url);
             timers.forEach((timer) => clearTimeout(timer));
         };
-    }, [imageFile]);
+    }, [capturedImage]);
+
+    if (!capturedImage || !selectedPlan) return null;
 
     const handleDownload = async () => {
         if (!reportData || downloadState === 'loading') {
@@ -244,16 +251,16 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
         setInfoMessage(null);
 
         try {
-            const imageDataUrl = await fileToDataUrl(imageFile, {
+            const imageDataUrl = await fileToDataUrl(capturedImage, {
                 maxWidth: 1800,
                 maxHeight: 1200,
                 quality: 0.82,
             });
-            
+
             // Ajouter description des TS et certificat d'intégrité
             let finalDescription = description;
             if (extraWorks.length > 0) {
-                const tsList = extraWorks.map(ts => 
+                const tsList = extraWorks.map(ts =>
                     `- ${ts.description} (${ts.estimatedCost}€ HT) [${ts.category}]`
                 ).join('\n');
                 finalDescription += '\n\n--- TRAVAUX SUPPLEMENTAIRES ---\n' + tsList;
@@ -262,11 +269,11 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
                     finalDescription += '\n\nSignature client: OUI';
                 }
             }
-            
+
             if (integrityProof) {
                 finalDescription += '\n\n--- CERTIFICATION ---\n' + generateCertificateText(integrityProof);
             }
-            
+
             // Préparer les données du rapport
             const reportPayload = {
                 reportId: reportData.reportId,
@@ -284,7 +291,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
                 category,
                 integrityHash: integrityProof?.hash,
                 clientSignature: clientSignature || undefined,
-                planId: selectedPlan.id, // Lien vers le plan
+                planId: selectedPlan!.id, // Lien vers le plan
                 extraWorks: extraWorks.map(w => ({
                     description: w.description,
                     estimatedCost: w.estimatedCost,
@@ -305,7 +312,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
                 // Afficher un message de succès (pas une erreur)
                 setInfoMessage('📱 Rapport sauvegardé localement. Il sera synchronisé quand le réseau reviendra.');
             }
-            
+
             // Générer le PDF
             await generatePremiumPDF({
                 imageDataUrl,
@@ -388,7 +395,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
         return (
             <div className="view">
                 <div className="view__top">
-                    <button onClick={onReset} className="link-btn">
+                    <button onClick={() => { resetApp(); navigate('/'); }} className="link-btn">
                         <ArrowLeft size={16} /> Annuler
                     </button>
                     <div className="stepper">
@@ -428,7 +435,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
     return (
         <div className="view">
             <div className="view__top">
-                <button onClick={onReset} className="link-btn">
+                <button onClick={() => { resetApp(); navigate('/'); }} className="link-btn">
                     <ArrowLeft size={16} /> Nouveau rapport
                 </button>
                 <div className="stepper">
@@ -439,16 +446,16 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
             </div>
 
             {/* Info du chantier */}
-            <div className="card mb-4" style={{ 
-                background: 'rgba(255, 183, 3, 0.1)', 
+            <div className="card mb-4" style={{
+                background: 'rgba(255, 183, 3, 0.1)',
                 borderColor: 'rgba(255, 183, 3, 0.3)',
                 padding: '16px 20px'
             }}>
                 <div className="flex items-center gap-3">
-                    <div style={{ 
-                        width: 40, 
-                        height: 40, 
-                        borderRadius: 10, 
+                    <div style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 10,
                         background: 'rgba(255, 183, 3, 0.2)',
                         display: 'grid',
                         placeItems: 'center'
@@ -483,7 +490,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
                                 <Shield size={12} /> Certifie
                             </span>
                         )}
-                        <button className="btn btn--ghost" onClick={onBack}>
+                        <button className="btn btn--ghost" onClick={() => navigate('/camera')}>
                             <FileText size={18} />
                             Reprendre la photo
                         </button>
@@ -533,15 +540,15 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
                             <span className="detail-value">{reportData?.address}</span>
                             <span className="detail-sub">{reportData?.coordinates}</span>
                         </div>
-                        
+
                         {/* Formulaire métier */}
                         <div className="detail-card detail-card--wide">
                             <span className="detail-label">Informations chantier</span>
                             <div className="form-grid">
                                 <div className="form-field">
                                     <label>Nom du chantier</label>
-                                    <input 
-                                        type="text" 
+                                    <input
+                                        type="text"
                                         className="input"
                                         value={siteName}
                                         onChange={(e) => setSiteName(e.target.value)}
@@ -550,8 +557,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
                                 </div>
                                 <div className="form-field">
                                     <label>Operateur</label>
-                                    <input 
-                                        type="text" 
+                                    <input
+                                        type="text"
                                         className="input"
                                         value={operatorName}
                                         onChange={(e) => setOperatorName(e.target.value)}
@@ -560,8 +567,8 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
                                 </div>
                                 <div className="form-field">
                                     <label>Client</label>
-                                    <input 
-                                        type="text" 
+                                    <input
+                                        type="text"
                                         className="input"
                                         value={clientName}
                                         onChange={(e) => setClientName(e.target.value)}
@@ -571,7 +578,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
                                 <div className="form-field form-field--row">
                                     <div className="form-field">
                                         <label>Priorite</label>
-                                        <select 
+                                        <select
                                             className="input select"
                                             value={priority}
                                             onChange={(e) => setPriority(e.target.value as 'low' | 'medium' | 'high')}
@@ -583,7 +590,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
                                     </div>
                                     <div className="form-field">
                                         <label>Categorie</label>
-                                        <select 
+                                        <select
                                             className="input select"
                                             value={category}
                                             onChange={(e) => setCategory(e.target.value as 'safety' | 'progress' | 'anomaly' | 'other')}
@@ -602,7 +609,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
                         <div className="detail-card detail-card--wide">
                             <div className="detail-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <span>Description</span>
-                                <button 
+                                <button
                                     className="btn btn--ghost btn--sm"
                                     onClick={() => setShowVoiceRecorder(!showVoiceRecorder)}
                                 >
@@ -610,16 +617,16 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
                                     {showVoiceRecorder ? 'Fermer' : 'Dicter'}
                                 </button>
                             </div>
-                            
+
                             {showVoiceRecorder && (
-                                <VoiceRecorderComponent 
+                                <VoiceRecorderComponent
                                     onTranscription={(text) => {
                                         setDescription(prev => prev + (prev ? '\n\n' : '') + text);
                                     }}
                                     existingText={description}
                                 />
                             )}
-                            
+
                             <textarea
                                 className="textarea"
                                 value={description}
@@ -627,7 +634,7 @@ export const ReportView: React.FC<ReportViewProps> = ({ imageFile, selectedPlan,
                                 placeholder="Décrivez les observations..."
                             />
                         </div>
-                        
+
                         {/* Pilier 1: Travaux Supplémentaires */}
                         <div className="detail-card detail-card--wide">
                             <ExtraWorkManager

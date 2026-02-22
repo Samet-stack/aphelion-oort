@@ -7,12 +7,11 @@ import { ExportModal } from './ExportModal';
 import { branding } from '../config/branding';
 import type { ApiReport } from '../services/api';
 import { motion } from 'framer-motion';
+import { toast } from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 
-interface HistoryViewProps {
-    onBack: () => void;
-}
-
-export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
+export const HistoryView: React.FC = () => {
+    const navigate = useNavigate();
     const { reports, deleteReport, stats, isLoading } = useAuth();
     const [searchQuery, setSearchQuery] = useState('');
     const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -35,8 +34,9 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
         if (!confirm('Supprimer ce rapport définitivement ?')) return;
         try {
             await deleteReport(id);
+            toast.success('Rapport supprimé');
         } catch (err) {
-            alert('Erreur lors de la suppression');
+            toast.error('Erreur lors de la suppression');
         }
     };
 
@@ -65,8 +65,9 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
                 extraWorks: report.extraWorks,
                 clientSignature: report.clientSignature,
             });
+            toast.success('PDF généré avec succès');
         } catch (err) {
-            alert('Erreur lors de la génération du PDF');
+            toast.error('Erreur lors de la génération du PDF');
         } finally {
             setDownloadingId(null);
         }
@@ -103,7 +104,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ onBack }) => {
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
             >
-                <button onClick={onBack} className="link-btn" style={{ color: 'var(--text-muted)' }}>
+                <button onClick={() => navigate('/')} className="link-btn" style={{ color: 'var(--text-muted)' }}>
                     <ArrowLeft size={16} /> Retour
                 </button>
                 <div className="stepper">

@@ -1,8 +1,9 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import helmet from 'helmet';
 import { initDb } from './database.js';
 import { verifyEmailConfig } from './services/email.js';
 import authRoutes from './routes/auth.js';
@@ -11,7 +12,6 @@ import shareRoutes from './routes/shares.js';
 import exportRoutes from './routes/export.js';
 import planRoutes from './routes/plans.js';
 
-dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -20,6 +20,9 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
 app.use(cors({
   origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175'],
   credentials: true
@@ -36,8 +39,8 @@ app.use('/api/plans', planRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ 
-    success: true, 
+  res.json({
+    success: true,
     message: 'SiteFlow API is running',
     timestamp: new Date().toISOString()
   });
@@ -46,7 +49,7 @@ app.get('/api/health', (req, res) => {
 // Servir le frontend en production
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../dist')));
-  
+
   app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, '../dist/index.html'));
   });
@@ -66,10 +69,10 @@ const start = async () => {
   try {
     // Initialiser la base de données
     await initDb();
-    
+
     // Vérifier la configuration email
     await verifyEmailConfig();
-    
+
     // Démarrer le serveur
     app.listen(PORT, () => {
       console.log('╔════════════════════════════════════════════════╗');
@@ -88,7 +91,7 @@ const start = async () => {
       console.log('  POST /api/reports       - Créer rapport (protégé)');
       console.log('');
     });
-    
+
   } catch (error) {
     console.error('Failed to start server:', error);
     process.exit(1);

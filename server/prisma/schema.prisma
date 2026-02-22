@@ -1,0 +1,198 @@
+generator client {
+  provider        = "prisma-client"
+  output          = "../generated/prisma"
+  previewFeatures = ["partialIndexes"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model email_verifications {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id     String    @db.Uuid
+  email       String    @db.Citext
+  token       String    @unique
+  expires_at  DateTime  @db.Timestamptz(6)
+  used        Boolean   @default(false)
+  verified_at DateTime? @db.Timestamptz(6)
+  created_at  DateTime  @default(now()) @db.Timestamptz(6)
+  users       users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([token], map: "idx_email_verifications_token_unused", where: raw("(used = false)"))
+  @@index([user_id], map: "idx_email_verifications_user")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model extra_works {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  report_id      String   @db.Uuid
+  user_id        String   @db.Uuid
+  description    String
+  estimated_cost Decimal  @default(0) @db.Decimal(12, 2)
+  urgency        String   @default("medium")
+  category       String?
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+  reports        reports  @relation(fields: [report_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users          users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([report_id], map: "idx_extra_report")
+  @@index([user_id], map: "idx_extra_user")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model plan_points {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  plan_id        String    @db.Uuid
+  user_id        String    @db.Uuid
+  position_x     Float
+  position_y     Float
+  title          String
+  description    String?
+  category       String    @default("autre")
+  photo_data_url String
+  date_label     String
+  room           String?
+  status         String    @default("a_faire")
+  point_number   Int
+  created_at     DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime  @default(now()) @db.Timestamptz(6)
+  plans          plans     @relation(fields: [plan_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users          users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  reports        reports[]
+
+  @@index([plan_id], map: "idx_plan_points_plan")
+  @@index([plan_id, point_number], map: "idx_plan_points_plan_number")
+  @@index([user_id], map: "idx_plan_points_user")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model plans {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id        String        @db.Uuid
+  site_name      String
+  address        String?
+  image_data_url String
+  created_at     DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime      @default(now()) @db.Timestamptz(6)
+  site_id        String?       @db.Uuid
+  plan_name      String        @default("Plan principal")
+  plan_points    plan_points[]
+  sites          sites?        @relation(fields: [site_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users          users         @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  reports        reports[]
+
+  @@index([created_at(sort: Desc)], map: "idx_plans_created")
+  @@index([site_id], map: "idx_plans_site")
+  @@index([user_id], map: "idx_plans_user")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model reports {
+  id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id          String        @db.Uuid
+  report_id        String
+  created_at       DateTime      @default(now()) @db.Timestamptz(6)
+  date_label       String?
+  address          String?
+  coordinates      String?
+  accuracy         Float?
+  location_source  String?
+  description      String?
+  image_data_url   String?
+  site_name        String?
+  operator_name    String?
+  client_name      String?
+  priority         String?
+  category         String?
+  integrity_hash   String?
+  client_signature String?
+  plan_point_id    String?       @db.Uuid
+  plan_id          String?       @db.Uuid
+  site_id          String?       @db.Uuid
+  extra_works      extra_works[]
+  plans            plans?        @relation(fields: [plan_id], references: [id], onUpdate: NoAction)
+  plan_points      plan_points?  @relation(fields: [plan_point_id], references: [id], onUpdate: NoAction)
+  sites            sites?        @relation(fields: [site_id], references: [id], onUpdate: NoAction)
+  users            users         @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  shares           shares[]
+
+  @@index([created_at(sort: Desc)], map: "idx_reports_date")
+  @@index([plan_id], map: "idx_reports_plan")
+  @@index([plan_point_id], map: "idx_reports_plan_point")
+  @@index([site_id], map: "idx_reports_site")
+  @@index([user_id], map: "idx_reports_user")
+  @@index([user_id, category], map: "idx_reports_user_category")
+  @@index([user_id, created_at(sort: Desc)], map: "idx_reports_user_date")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model shares {
+  id                                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  report_id                          String    @db.Uuid
+  owner_id                           String    @db.Uuid
+  shared_with_email                  String    @db.Citext
+  shared_with_id                     String?   @db.Uuid
+  permission                         String    @default("view")
+  status                             String    @default("pending")
+  message                            String?
+  created_at                         DateTime  @default(now()) @db.Timestamptz(6)
+  accepted_at                        DateTime? @db.Timestamptz(6)
+  users_shares_owner_idTousers       users     @relation("shares_owner_idTousers", fields: [owner_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  reports                            reports   @relation(fields: [report_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_shares_shared_with_idTousers users?    @relation("shares_shared_with_idTousers", fields: [shared_with_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([report_id, shared_with_email], map: "shares_unique_report_recipient")
+  @@index([owner_id], map: "idx_shares_owner")
+  @@index([shared_with_email], map: "idx_shares_recipient_email")
+  @@index([shared_with_id], map: "idx_shares_recipient_id")
+  @@index([report_id], map: "idx_shares_report")
+  @@index([status], map: "idx_shares_status")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model sites {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String    @db.Uuid
+  site_name  String
+  address    String?
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at DateTime  @default(now()) @db.Timestamptz(6)
+  plans      plans[]
+  reports    reports[]
+  users      users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([created_at(sort: Desc)], map: "idx_sites_created")
+  @@index([user_id], map: "idx_sites_user")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model users {
+  id                                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email                               String                @unique @db.Citext
+  password                            String
+  first_name                          String?
+  last_name                           String?
+  company_name                        String?
+  role                                String                @default("user")
+  email_verified                      Boolean               @default(true)
+  created_at                          DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at                          DateTime              @default(now()) @db.Timestamptz(6)
+  last_login_at                       DateTime?             @db.Timestamptz(6)
+  email_verifications                 email_verifications[]
+  extra_works                         extra_works[]
+  plan_points                         plan_points[]
+  plans                               plans[]
+  reports                             reports[]
+  shares_shares_owner_idTousers       shares[]              @relation("shares_owner_idTousers")
+  shares_shares_shared_with_idTousers shares[]              @relation("shares_shared_with_idTousers")
+  sites                               sites[]
+
+  @@index([email], map: "idx_users_email")
+}

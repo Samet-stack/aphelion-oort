@@ -1,14 +1,10 @@
 import React from 'react';
 import { Camera, FileText, MapPin, Sparkles, ArrowRight, Map } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 
-interface HeroProps {
-    onStart: () => void;
-    onHistory: () => void;
-    onPlans: () => void;
-}
-
-export const Hero: React.FC<HeroProps> = ({ onStart, onHistory, onPlans }) => {
+export const Hero: React.FC = () => {
+    const navigate = useNavigate();
     const now = new Date();
     const dateLabel = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium' }).format(now);
     const timeLabel = new Intl.DateTimeFormat('fr-FR', { timeStyle: 'short' }).format(now);
@@ -54,7 +50,7 @@ export const Hero: React.FC<HeroProps> = ({ onStart, onHistory, onPlans }) => {
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
                         className="btn btn--primary"
-                        onClick={onStart}
+                        onClick={() => navigate('/select-plan')}
                         style={{ boxShadow: '0 4px 20px var(--primary-glow)' }}
                     >
                         <Map size={18} />
@@ -65,7 +61,7 @@ export const Hero: React.FC<HeroProps> = ({ onStart, onHistory, onPlans }) => {
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
                         className="btn btn--ghost"
-                        onClick={onHistory}
+                        onClick={() => navigate('/history')}
                     >
                         Voir l'historique
                     </motion.button>
@@ -73,7 +69,7 @@ export const Hero: React.FC<HeroProps> = ({ onStart, onHistory, onPlans }) => {
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
                         className="btn btn--ghost"
-                        onClick={onPlans}
+                        onClick={() => navigate('/plans')}
                     >
                         Gérer les plans
                     </motion.button>

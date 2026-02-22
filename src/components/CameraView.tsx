@@ -1,20 +1,26 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Camera, Upload, ArrowLeft, MapPin, Building2 } from 'lucide-react';
-import { ApiPlan } from '../services/api';
+import { useNavigate } from 'react-router-dom';
+import { useAppStore } from '../store/useAppStore';
 
-interface CameraViewProps {
-    onCapture: (file: File) => void;
-    onBack: () => void;
-    selectedPlan: ApiPlan;
-}
-
-export const CameraView: React.FC<CameraViewProps> = ({ onCapture, onBack, selectedPlan }) => {
+export const CameraView: React.FC = () => {
+    const navigate = useNavigate();
+    const { selectedPlan, setCapturedImage } = useAppStore();
     const inputRef = useRef<HTMLInputElement>(null);
     const [isDragging, setIsDragging] = useState(false);
 
+    useEffect(() => {
+        if (!selectedPlan) {
+            navigate('/select-plan');
+        }
+    }, [selectedPlan, navigate]);
+
+    if (!selectedPlan) return null;
+
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
-            onCapture(e.target.files[0]);
+            setCapturedImage(e.target.files[0]);
+            navigate('/report');
         }
     };
 
@@ -22,14 +28,15 @@ export const CameraView: React.FC<CameraViewProps> = ({ onCapture, onBack, selec
         e.preventDefault();
         setIsDragging(false);
         if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-            onCapture(e.dataTransfer.files[0]);
+            setCapturedImage(e.dataTransfer.files[0]);
+            navigate('/report');
         }
     };
 
     return (
         <div className="view">
             <div className="view__top">
-                <button onClick={onBack} className="link-btn">
+                <button onClick={() => navigate('/select-plan')} className="link-btn">
                     <ArrowLeft size={16} /> Changer de chantier
                 </button>
                 <div className="stepper">
@@ -40,16 +47,16 @@ export const CameraView: React.FC<CameraViewProps> = ({ onCapture, onBack, selec
             </div>
 
             {/* Info du chantier sélectionné */}
-            <div className="card mb-4" style={{ 
-                background: 'rgba(255, 183, 3, 0.1)', 
+            <div className="card mb-4" style={{
+                background: 'rgba(255, 183, 3, 0.1)',
                 borderColor: 'rgba(255, 183, 3, 0.3)',
                 padding: '16px 20px'
             }}>
                 <div className="flex items-center gap-3">
-                    <div style={{ 
-                        width: 40, 
-                        height: 40, 
-                        borderRadius: 10, 
+                    <div style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 10,
                         background: 'rgba(255, 183, 3, 0.2)',
                         display: 'grid',
                         placeItems: 'center'
