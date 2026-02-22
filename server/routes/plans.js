@@ -13,6 +13,13 @@ import {
 
 const router = express.Router();
 const createHttpError = (statusCode, message) => Object.assign(new Error(message), { statusCode });
+const bumpSiteActivity = async (executor, siteId, userId) => {
+  if (!siteId) return;
+  await executor(
+    'UPDATE sites SET updated_at = now() WHERE id = ? AND user_id = ?',
+    [siteId, userId]
+  );
+};
 
 // Toutes les routes sont protégées
 router.use(authMiddleware);
@@ -161,6 +168,7 @@ router.post('/', validateCreatePlan, async (req, res) => {
             imageDataUrl,
           ]
         );
+        await bumpSiteActivity(tx.run, siteId, userId);
       } else {
         // Legacy: creer chantier + plan en une seule action
         if (!siteName || !imageDataUrl) {
@@ -235,7 +243,7 @@ router.delete('/:id', async (req, res) => {
     const { id } = req.params;
 
     const plan = await get(
-      'SELECT id FROM plans WHERE id = ? AND user_id = ?',
+      'SELECT id, site_id FROM plans WHERE id = ? AND user_id = ?',
       [id, userId]
     );
 
@@ -247,6 +255,7 @@ router.delete('/:id', async (req, res) => {
     }
 
     await run('DELETE FROM plans WHERE id = ?', [id]);
+    await bumpSiteActivity(run, plan.siteId, userId);
     await invalidateUserCache(userId, ['plans', 'sites', 'reports']);
 
     res.json({ success: true, message: 'Plan supprimé.' });
@@ -278,7 +287,7 @@ router.post('/:id/points', validateCreatePoint, async (req, res) => {
     const point = await withTransaction(async (tx) => {
       // Verrouille le plan pour serialiser la numerotation des points.
       const plan = await tx.get(
-        'SELECT id FROM plans WHERE id = ? AND user_id = ? FOR UPDATE',
+        'SELECT id, site_id FROM plans WHERE id = ? AND user_id = ? FOR UPDATE',
         [planId, userId]
       );
       if (!plan) {
@@ -298,6 +307,7 @@ router.post('/:id/points', validateCreatePoint, async (req, res) => {
         [pointId, planId, userId, positionX, positionY, title, description || null,
          category || 'autre', photoDataUrl, dateLabel, room || null, status || 'a_faire', pointNumber]
       );
+      await bumpSiteActivity(tx.run, plan.siteId, userId);
 
       return tx.get('SELECT * FROM plan_points WHERE id = ?', [pointId]);
     });
@@ -331,8 +341,11 @@ router.put('/:id/points/:pointId', validateUpdatePoint, async (req, res) => {
     const { id: planId, pointId } = req.params;
 
     const point = await get(
-      'SELECT id FROM plan_points WHERE id = ? AND plan_id = ? AND user_id = ?',
-      [pointId, planId, userId]
+      `SELECT pp.id, p.site_id
+       FROM plan_points pp
+       JOIN plans p ON p.id = pp.plan_id
+       WHERE pp.id = ? AND pp.plan_id = ? AND pp.user_id = ? AND p.user_id = ?`,
+      [pointId, planId, userId, userId]
     );
     if (!point) {
       return res.status(404).json({
@@ -356,6 +369,7 @@ router.put('/:id/points/:pointId', validateUpdatePoint, async (req, res) => {
       [title || null, description, category || null, photoDataUrl || null,
        dateLabel || null, room, status || null, pointId]
     );
+    await bumpSiteActivity(run, point.siteId, userId);
 
     const updated = await get('SELECT * FROM plan_points WHERE id = ?', [pointId]);
     await invalidateUserCache(userId, ['plans', 'sites', 'reports']);
@@ -385,8 +399,11 @@ router.delete('/:id/points/:pointId', async (req, res) => {
     const { id: planId, pointId } = req.params;
 
     const point = await get(
-      'SELECT id FROM plan_points WHERE id = ? AND plan_id = ? AND user_id = ?',
-      [pointId, planId, userId]
+      `SELECT pp.id, p.site_id
+       FROM plan_points pp
+       JOIN plans p ON p.id = pp.plan_id
+       WHERE pp.id = ? AND pp.plan_id = ? AND pp.user_id = ? AND p.user_id = ?`,
+      [pointId, planId, userId, userId]
     );
     if (!point) {
       return res.status(404).json({
@@ -396,6 +413,7 @@ router.delete('/:id/points/:pointId', async (req, res) => {
     }
 
     await run('DELETE FROM plan_points WHERE id = ?', [pointId]);
+    await bumpSiteActivity(run, point.siteId, userId);
     await invalidateUserCache(userId, ['plans', 'sites', 'reports']);
 
     res.json({ success: true, message: 'Point supprimé.' });

@@ -35,7 +35,7 @@ router.get('/', async (req, res) => {
            left join plan_points pp on pp.plan_id = p.id
            where s.user_id = ?
            group by s.id
-           order by s.created_at desc`,
+           order by s.updated_at desc, s.created_at desc`,
           [userId]
         );
 

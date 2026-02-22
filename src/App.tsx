@@ -44,6 +44,7 @@ function AppContent() {
   const [capturedImage, setCapturedImage] = useState<File | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<ApiPlan | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<ApiPlanPoint | null>(null);
+  const [planViewInitialSiteId, setPlanViewInitialSiteId] = useState<string | null>(null);
   const [planViewInitialPlanId, setPlanViewInitialPlanId] = useState<string | null>(null);
   const [planViewInitialPointId, setPlanViewInitialPointId] = useState<string | null>(null);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
@@ -114,14 +115,15 @@ function AppContent() {
     );
   }
 
-  const openPlansView = (opts?: { planId?: string | null; pointId?: string | null }) => {
+  const openPlansView = (opts?: { siteId?: string | null; planId?: string | null; pointId?: string | null }) => {
+    setPlanViewInitialSiteId(opts?.siteId ?? null);
     setPlanViewInitialPlanId(opts?.planId ?? null);
     setPlanViewInitialPointId(opts?.pointId ?? null);
     setView('PLANS');
   };
 
   // Flux : Chantier -> Plans -> Points -> PDF
-  const handleStart = () => openPlansView();
+  const handleStart = (siteId?: string) => openPlansView({ siteId: siteId ?? null });
   const handleHistory = () => setView('HISTORY');
   const handleStartReportFromPlan = (plan: ApiPlan) => {
     setSelectedPlan(plan);
@@ -172,6 +174,7 @@ function AppContent() {
     setCapturedImage(null);
     setSelectedPlan(null);
     setSelectedPoint(null);
+    setPlanViewInitialSiteId(null);
     setPlanViewInitialPlanId(null);
     setPlanViewInitialPointId(null);
     setView('LANDING');
@@ -197,6 +200,7 @@ function AppContent() {
                 onBack={handleReset}
                 onCreateReportFromPoint={handleCreateReportFromPoint}
                 onStartReportFromPlan={handleStartReportFromPlan}
+                initialSiteId={planViewInitialSiteId}
                 initialPlanId={planViewInitialPlanId}
                 initialPointId={planViewInitialPointId}
               />

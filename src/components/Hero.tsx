@@ -1,13 +1,64 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Camera, FileText, Sparkles, ArrowRight, Map, ShieldCheck, Cloud, Smartphone, Building2, Layers, MapPin } from 'lucide-react';
+import { Camera, FileText, Sparkles, ArrowRight, Map, ShieldCheck, Cloud, Smartphone, Building2, Layers, MapPin, Activity, Clock3, ScanLine } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { sitesApi, type ApiSiteListItem } from '../services/api';
 import { branding } from '../config/branding';
 
 interface HeroProps {
-    onStart: () => void;
+    onStart: (siteId?: string) => void;
     onHistory: () => void;
 }
+
+const numberFormat = new Intl.NumberFormat('fr-FR');
+const relativeTime = new Intl.RelativeTimeFormat('fr', { numeric: 'auto' });
+const sortByRecency = (a: ApiSiteListItem, b: ApiSiteListItem) => {
+    const updatedA = Date.parse(a.updatedAt);
+    const updatedB = Date.parse(b.updatedAt);
+    if (!Number.isNaN(updatedA) && !Number.isNaN(updatedB) && updatedA !== updatedB) {
+        return updatedB - updatedA;
+    }
+    if (!Number.isNaN(updatedA) && Number.isNaN(updatedB)) {
+        return -1;
+    }
+    if (Number.isNaN(updatedA) && !Number.isNaN(updatedB)) {
+        return 1;
+    }
+
+    const createdA = Date.parse(a.createdAt);
+    const createdB = Date.parse(b.createdAt);
+    if (!Number.isNaN(createdA) && !Number.isNaN(createdB) && createdA !== createdB) {
+        return createdB - createdA;
+    }
+    if (!Number.isNaN(createdA) && Number.isNaN(createdB)) {
+        return -1;
+    }
+    if (Number.isNaN(createdA) && !Number.isNaN(createdB)) {
+        return 1;
+    }
+
+    return a.siteName.localeCompare(b.siteName, 'fr');
+};
+
+const formatRelativeLabel = (isoDate: string) => {
+    const timestamp = Date.parse(isoDate);
+    if (Number.isNaN(timestamp)) {
+        return 'Mise à jour récente';
+    }
+
+    const delta = timestamp - Date.now();
+    const absDelta = Math.abs(delta);
+    const minute = 60 * 1000;
+    const hour = 60 * minute;
+    const day = 24 * hour;
+
+    if (absDelta < hour) {
+        return relativeTime.format(Math.round(delta / minute), 'minute');
+    }
+    if (absDelta < day) {
+        return relativeTime.format(Math.round(delta / hour), 'hour');
+    }
+    return relativeTime.format(Math.round(delta / day), 'day');
+};
 
 export const Hero: React.FC<HeroProps> = ({ onStart, onHistory }) => {
     const [sites, setSites] = useState<ApiSiteListItem[]>([]);
@@ -19,7 +70,7 @@ export const Hero: React.FC<HeroProps> = ({ onStart, onHistory }) => {
             try {
                 const data = await sitesApi.getAll();
                 if (active) {
-                    setSites(data.slice(0, 5));
+                    setSites(data);
                 }
             } catch {
                 if (active) {
@@ -42,6 +93,22 @@ export const Hero: React.FC<HeroProps> = ({ onStart, onHistory }) => {
         () => sites.reduce((sum, site) => sum + (site.plansCount || 0), 0),
         [sites]
     );
+    const totalPoints = useMemo(
+        () => sites.reduce((sum, site) => sum + (site.pointsCount || 0), 0),
+        [sites]
+    );
+    const recentSites = useMemo(
+        () => [...sites].sort(sortByRecency).slice(0, 5),
+        [sites]
+    );
+    const recentTotalPlans = useMemo(
+        () => recentSites.reduce((sum, site) => sum + (site.plansCount || 0), 0),
+        [recentSites]
+    );
+    const featuredSite = recentSites[0] ?? null;
+    const compactSites = featuredSite ? recentSites.slice(1, 5) : [];
+    const avgPointsPerSite = sites.length ? Math.round(totalPoints / sites.length) : 0;
+    const featuredLastUpdate = featuredSite ? formatRelativeLabel(featuredSite.updatedAt) : 'Synchronisation active';
 
     const containerVariants = {
         hidden: { opacity: 0 },
@@ -69,22 +136,41 @@ export const Hero: React.FC<HeroProps> = ({ onStart, onHistory }) => {
                         Rapports instantanés
                     </motion.p>
                     <motion.h1 variants={itemVariants} className="hero__title">
-                        Photo, analyse, PDF officiel<br />en quelques minutes.
+                        Votre chantier devient<br />un rapport signé.
                     </motion.h1>
                     <motion.p variants={itemVariants} className="hero__copy">
                         SiteFlow Pro automatise les rapports de chantier. Capturez une photo sur site,
                         laissez l'IA enrichir les métadonnées et obtenez un PDF propre, prêt à signer.
                     </motion.p>
 
+                    <motion.div variants={itemVariants} className="hero__stats">
+                        <div className="hero-stat">
+                            <p className="hero-stat__label">Chantiers actifs</p>
+                            <p className="hero-stat__value">{loadingSites ? '...' : numberFormat.format(sites.length)}</p>
+                            <p className="hero-stat__meta">suivis dans votre espace</p>
+                        </div>
+                        <div className="hero-stat">
+                            <p className="hero-stat__label">Plans disponibles</p>
+                            <p className="hero-stat__value">{loadingSites ? '...' : numberFormat.format(totalPlans)}</p>
+                            <p className="hero-stat__meta">prêts pour capture terrain</p>
+                        </div>
+                        <div className="hero-stat">
+                            <p className="hero-stat__label">Précision terrain</p>
+                            <p className="hero-stat__value">{loadingSites ? '...' : `${numberFormat.format(avgPointsPerSite)} pts`}</p>
+                            <p className="hero-stat__meta">moyenne par chantier</p>
+                        </div>
+                    </motion.div>
+
                     <motion.div variants={itemVariants} className="hero__actions">
                         <motion.button
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}
                             className="btn btn--primary"
-                            onClick={onStart}
+                            onClick={() => onStart()}
+                            type="button"
                         >
                             <Map size={18} />
-                            + Nouveau chantier
+                            Nouveau chantier
                             <ArrowRight size={18} />
                         </motion.button>
                         <motion.button
@@ -92,9 +178,20 @@ export const Hero: React.FC<HeroProps> = ({ onStart, onHistory }) => {
                             whileTap={{ scale: 0.98 }}
                             className="btn btn--ghost"
                             onClick={onHistory}
+                            type="button"
                         >
                             Voir l'historique
                         </motion.button>
+                    </motion.div>
+
+                    <motion.div variants={itemVariants} className="hero__signal">
+                        <span className="hero__assist-dot" />
+                        <Activity size={16} />
+                        <span>Pipeline IA opérationnel</span>
+                        <span className="hero__signal-badge">
+                            <Clock3 size={14} />
+                            {featuredLastUpdate}
+                        </span>
                     </motion.div>
 
                     <motion.div variants={itemVariants} className="hero__pipeline">
@@ -136,13 +233,60 @@ export const Hero: React.FC<HeroProps> = ({ onStart, onHistory }) => {
                                 Vos chantiers
                             </h3>
                             <p className="hero-sites__meta">
-                                {loadingSites ? 'Synchronisation...' : `${sites.length} Récents`}
+                                {loadingSites ? 'Synchronisation...' : `${numberFormat.format(recentSites.length)} récents`}
                             </p>
                         </div>
                         <div className="hero-sites__counter">
                             <Layers size={14} />
-                            {totalPlans} plans
+                            {loadingSites ? '...' : `${numberFormat.format(recentTotalPlans)} plans`}
                         </div>
+                    </div>
+
+                    <div className="hero-sites__featured">
+                        {loadingSites && (
+                            <div className="hero-sites__featured-card hero-sites__featured-card--skeleton">
+                                <div className="hero-sites__featured-top">
+                                    <div className="hero-sites__featured-pill skeleton" />
+                                    <div className="hero-sites__featured-time skeleton" />
+                                </div>
+                                <div className="hero-sites__featured-title skeleton" />
+                                <div className="hero-sites__featured-subtitle skeleton" />
+                                <div className="hero-sites__featured-metrics">
+                                    <div className="hero-sites__featured-chip skeleton" />
+                                    <div className="hero-sites__featured-chip skeleton" />
+                                </div>
+                            </div>
+                        )}
+
+                        {!loadingSites && featuredSite && (
+                            <button onClick={() => onStart(featuredSite.id)} className="hero-sites__featured-card" type="button">
+                                <div className="hero-sites__featured-top">
+                                    <span className="hero-sites__featured-pill">
+                                        <ScanLine size={13} />
+                                        Priorité du jour
+                                    </span>
+                                    <span className="hero-sites__featured-time">{featuredLastUpdate}</span>
+                                </div>
+                                <h4 className="hero-sites__featured-name">{featuredSite.siteName}</h4>
+                                <p className="hero-sites__featured-address">
+                                    {featuredSite.address || 'Adresse en attente'}
+                                </p>
+                                <div className="hero-sites__featured-metrics">
+                                    <span className="hero-sites__featured-chip">
+                                        <MapPin size={12} />
+                                        {featuredSite.pointsCount} points
+                                    </span>
+                                    <span className="hero-sites__featured-chip">
+                                        <Layers size={12} />
+                                        {featuredSite.plansCount} plans
+                                    </span>
+                                </div>
+                                <span className="hero-sites__featured-cta">
+                                    Ouvrir le chantier
+                                    <ArrowRight size={16} />
+                                </span>
+                            </button>
+                        )}
                     </div>
 
                     <div className="hero-sites__list">
@@ -162,17 +306,18 @@ export const Hero: React.FC<HeroProps> = ({ onStart, onHistory }) => {
                                     <MapPin />
                                 </div>
                                 <p>Aucun chantier récent</p>
-                                <button onClick={onStart} className="hero-sites__empty-link">
+                                <button onClick={() => onStart()} className="hero-sites__empty-link" type="button">
                                     Créer un nouveau chantier
                                 </button>
                             </div>
                         )}
 
-                        {!loadingSites && sites.map((site) => (
+                        {!loadingSites && compactSites.map((site) => (
                             <button
                                 key={site.id}
-                                onClick={onStart}
+                                onClick={() => onStart(site.id)}
                                 className="hero-sites__item"
+                                type="button"
                             >
                                 <div className="hero-sites__item-logo">
                                     {branding.logoUrl ? (
@@ -199,6 +344,9 @@ export const Hero: React.FC<HeroProps> = ({ onStart, onHistory }) => {
                                             {site.plansCount} plans
                                         </span>
                                     </div>
+                                </div>
+                                <div className="hero-sites__item-updated">
+                                    {formatRelativeLabel(site.updatedAt)}
                                 </div>
                                 <div className="hero-sites__item-arrow">
                                     <ArrowRight size={20} />

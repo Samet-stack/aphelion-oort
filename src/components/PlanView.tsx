@@ -25,6 +25,7 @@ interface PlanViewProps {
   onBack: () => void;
   onCreateReportFromPoint?: (plan: ApiPlan, point: ApiPlanPoint) => void;
   onStartReportFromPlan?: (plan: ApiPlan) => void;
+  initialSiteId?: string | null;
   initialPlanId?: string | null;
   initialPointId?: string | null;
 }
@@ -61,6 +62,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
   onBack,
   onCreateReportFromPoint,
   onStartReportFromPlan,
+  initialSiteId,
   initialPlanId,
   initialPointId,
 }) => {
@@ -143,7 +145,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
     loadSites();
   }, [loadSites]);
 
-  const openSite = async (siteId: string) => {
+  const openSite = useCallback(async (siteId: string) => {
     setLoadingSite(true);
     try {
       const site = await sitesApi.getById(siteId);
@@ -157,7 +159,7 @@ export const PlanView: React.FC<PlanViewProps> = ({
     } finally {
       setLoadingSite(false);
     }
-  };
+  }, [toast]);
 
   const refreshCurrentSitePlans = useCallback(
     async (siteId?: string) => {
@@ -224,10 +226,15 @@ export const PlanView: React.FC<PlanViewProps> = ({
   // Resume mechanics ...
   useEffect(() => {
     if (appliedInitialRef.current) return;
-    if (!initialPlanId) return;
+    if (initialPlanId) {
+      appliedInitialRef.current = true;
+      openPlan(initialPlanId, { focusPointId: initialPointId || null, fromResume: true });
+      return;
+    }
+    if (!initialSiteId) return;
     appliedInitialRef.current = true;
-    openPlan(initialPlanId, { focusPointId: initialPointId || null, fromResume: true });
-  }, [initialPlanId, initialPointId, openPlan]);
+    openSite(initialSiteId);
+  }, [initialPlanId, initialPointId, initialSiteId, openPlan, openSite]);
 
   useEffect(() => {
     if (subView !== 'VIEWER') return;
