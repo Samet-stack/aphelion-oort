@@ -316,6 +316,14 @@ select {
   margin-left: auto;
 }
 
+.status-row__auth {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .status-user {
   display: inline-flex;
   align-items: center;
@@ -2796,6 +2804,223 @@ select {
   text-align: center;
   font-size: 0.76rem;
   color: var(--text-muted);
+}
+
+/* ===== Responsive Hardening ===== */
+@media (max-width: 1024px) {
+  .app__header {
+    padding: 12px 14px;
+    gap: 12px;
+  }
+
+  .header-left {
+    width: 100%;
+    gap: 12px;
+  }
+
+  .brand {
+    min-width: 0;
+  }
+
+  .brand__text {
+    min-width: 0;
+    max-width: min(70vw, 280px);
+  }
+
+  .brand__name,
+  .brand__tag {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .quick-nav {
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .quick-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .quick-nav__item {
+    flex: 0 0 auto;
+  }
+
+  .status-row {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 720px) {
+  .app__main {
+    padding: 14px 12px 44px;
+  }
+
+  .app__footer {
+    padding: 12px;
+    font-size: 0.68rem;
+    letter-spacing: 0.05em;
+  }
+
+  .card {
+    padding: 16px;
+    border-radius: 16px;
+  }
+
+  .btn {
+    min-height: 44px;
+    padding: 11px 14px;
+  }
+
+  .btn--sm {
+    min-height: 34px;
+    padding: 6px 10px;
+  }
+
+  .status-user {
+    max-width: 40vw;
+  }
+
+  .status-row__auth {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .status-row__auth .btn {
+    min-height: 36px;
+    padding: 7px 12px;
+  }
+
+  .hero__eyebrow {
+    letter-spacing: 0.2em;
+  }
+
+  .hero__title {
+    font-size: clamp(1.8rem, 10vw, 2.4rem);
+  }
+
+  .hero__actions {
+    width: 100%;
+    gap: 10px;
+  }
+
+  .hero__actions .btn {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .home-panel__header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .home-panel__header .btn {
+    width: 100%;
+  }
+
+  .home-stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stepper {
+    width: 100%;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    scrollbar-width: none;
+  }
+
+  .stepper::-webkit-scrollbar {
+    display: none;
+  }
+
+  .stepper__item {
+    flex: 0 0 auto;
+    letter-spacing: 0.12em;
+    font-size: 0.64rem;
+  }
+
+  .selected-plan-banner {
+    align-items: flex-start;
+  }
+
+  .selected-plan-banner__content p {
+    display: flex;
+  }
+
+  .camera__actions .btn,
+  .report__actions .btn,
+  .history__actions .btn {
+    width: 100%;
+  }
+
+  .history-card__actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .history-export-fab {
+    left: 12px;
+    right: 12px;
+    bottom: 10px;
+  }
+
+  .history-export-fab .btn {
+    width: 100%;
+  }
+
+  .modal__header,
+  .modal__body,
+  .modal__footer {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .modal__footer {
+    flex-direction: column-reverse;
+  }
+
+  .modal__footer .btn {
+    width: 100%;
+  }
+
+  .plan-card {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .plan-card__name {
+    font-size: 0.94rem;
+  }
+
+  .plan-card__meta {
+    word-break: break-word;
+  }
+
+  .plan-card__badge,
+  .plan-card__right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .plan-points-list__item {
+    align-items: flex-start;
+  }
+
+  .plan-points-list__badges {
+    flex-wrap: wrap;
+  }
+
+  .dropzone {
+    min-height: 180px;
+    padding: 18px 12px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

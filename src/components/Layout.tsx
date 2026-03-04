@@ -97,7 +97,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <div className="status-row">
                     {isAuthenticated && user && <OfflineStatusDot />}
                     {isAuthenticated && user ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                        <div className="status-row__auth">
                             <div className="status-user" title={user.email} style={{ background: 'var(--bg-surface-hover)', padding: '4px 12px', borderRadius: '20px' }}>
                                 <User size={14} color="var(--primary)" />
                                 <span className="status-user__name">{user.firstName || user.email}</span>
