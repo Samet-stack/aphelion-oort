@@ -17,6 +17,7 @@ export const PlanSelector: React.FC = () => {
 
   useEffect(() => {
     loadPlans();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offlineState.isOnline]);
 
   const loadPlans = async () => {
@@ -87,8 +88,8 @@ export const PlanSelector: React.FC = () => {
             <ArrowLeft size={16} /> Retour
           </button>
         </div>
-        <div className="card analysis text-center py-12">
-          <Loader2 size={48} className="mx-auto mb-4 animate-spin text-[#ffb703]" />
+        <div className="card analysis">
+          <Loader2 size={38} className="spin" />
           <p>Chargement des chantiers...</p>
         </div>
       </div>
@@ -108,13 +109,11 @@ export const PlanSelector: React.FC = () => {
         </div>
       </div>
 
-      <section className="card">
-        <div className="history__header mb-6">
-          <div>
-            <h2 className="text-xl font-bold">Sélectionner un chantier</h2>
-            <p className="text-sm text-text-muted mt-1">
-              Vous devez d'abord choisir un chantier pour créer un rapport
-            </p>
+      <section className="card plan-selector">
+        <div className="plan-selector__header">
+          <div className="plan-selector__title-wrap">
+            <h2>Selectionner un chantier</h2>
+            <p>Choisissez un plan pour lancer la capture et preparer votre rapport.</p>
           </div>
           <button className="btn btn--ghost" onClick={() => navigate('/plans')}>
             <Plus size={16} />
@@ -122,17 +121,22 @@ export const PlanSelector: React.FC = () => {
           </button>
         </div>
 
+        <div className="plan-selector__meta">
+          <span className="badge badge--info">{plans.length} chantier(s) disponible(s)</span>
+          {!offlineState.isOnline && <span className="badge badge--warning">Mode hors-ligne</span>}
+        </div>
+
         {error && (
-          <div className="mb-4 p-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400">
+          <div className="alert alert--danger">
             {error}
           </div>
         )}
 
         {plans.length === 0 ? (
-          <div className="text-center py-12">
-            <Map size={64} className="mx-auto mb-4 text-text-muted opacity-30" />
-            <h3 className="text-lg font-semibold mb-2">Aucun chantier disponible</h3>
-            <p className="text-sm text-text-muted mb-6">
+          <div className="plan-selector__empty">
+            <Map size={50} />
+            <h3>Aucun chantier disponible</h3>
+            <p>
               Vous devez d'abord créer un plan de chantier avant de pouvoir faire un rapport
             </p>
             <button className="btn btn--primary" onClick={() => navigate('/plans')}>
@@ -141,13 +145,15 @@ export const PlanSelector: React.FC = () => {
             </button>
           </div>
         ) : (
-          <div className="grid gap-4">
+          <div className="plan-selector__list">
             {plans.map((plan) => (
-              <div
+              <button
+                type="button"
                 key={plan.id}
                 onClick={() => handleSelectPlan(plan)}
-                className={`plan-card group cursor-pointer transition-all ${selectedPlanId === plan.id ? 'ring-2 ring-[#ffb703]' : ''
+                className={`plan-card ${selectedPlanId === plan.id ? 'plan-card--active' : ''
                   }`}
+                aria-label={`Selectionner le chantier ${plan.siteName}`}
               >
                 <div className="plan-card__info">
                   <span className="plan-card__name">{plan.siteName}</span>
@@ -155,24 +161,24 @@ export const PlanSelector: React.FC = () => {
                     {plan.address || 'Pas d\'adresse'} • {plan.pointsCount || 0} points
                   </span>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="plan-card__right">
                   <span className={`badge ${plan.pointsCount > 0 ? 'badge--info' : 'badge--warning'}`}>
                     <FileText size={12} />
                     {plan.pointsCount || 0} points
                   </span>
                   <ChevronRight
                     size={20}
-                    className="text-text-muted group-hover:text-[#ffb703] transition-colors"
+                    className="plan-card__arrow"
                   />
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         )}
 
         {plans.length > 0 && (
-          <div className="mt-6 pt-6 border-t border-white/10">
-            <button className="btn btn--ghost w-full" onClick={() => navigate('/plans')}>
+          <div className="plan-selector__footer">
+            <button className="btn btn--ghost" onClick={() => navigate('/plans')}>
               <Plus size={16} />
               Créer un nouveau chantier
             </button>

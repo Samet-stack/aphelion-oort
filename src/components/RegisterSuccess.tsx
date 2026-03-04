@@ -63,7 +63,7 @@ export const RegisterSuccess: React.FC = () => {
           <button
             className="btn btn--primary"
             style={{ width: '100%' }}
-            onClick={() => navigate(`/login${email ? `?email=${encodeURIComponent(email)}` : ''}`, { replace: true })}
+            onClick={() => navigate(`/${email ? `?email=${encodeURIComponent(email)}` : ''}`, { replace: true })}
           >
             Se connecter
             <ArrowRight size={18} />
@@ -72,7 +72,7 @@ export const RegisterSuccess: React.FC = () => {
           <button
             className="btn btn--ghost"
             style={{ width: '100%', marginTop: '0.75rem' }}
-            onClick={() => navigate('/login', { replace: true })}
+            onClick={() => navigate('/', { replace: true })}
           >
             Aller a la connexion
           </button>

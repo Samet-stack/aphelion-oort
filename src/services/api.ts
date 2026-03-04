@@ -1,7 +1,6 @@
 // Service API pour communiquer avec le backend
-export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+export const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3001/api' : '/api');
 
-// Type pour les réponses API
 export interface ApiResponse<T = any> {
   success: boolean;
   message?: string;
@@ -71,27 +70,32 @@ const fetchWithAuth = async (
   options: RequestInit = {}
 ): Promise<ApiResponse> => {
   const token = getToken();
-  
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...options.headers as Record<string, string>
   };
-  
+
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
-  
-  const response = await fetch(`${API_URL}${endpoint}`, {
-    ...options,
-    headers
-  });
-  
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${endpoint}`, {
+      ...options,
+      headers
+    });
+  } catch {
+    throw new Error('Impossible de contacter le serveur. Rechargez la page et verifiez votre connexion.');
+  }
+
   const data = await response.json();
-  
+
   if (!response.ok) {
     throw createApiError(response.status, data);
   }
-  
+
   return data;
 };
 
@@ -104,20 +108,25 @@ export const authApi = {
     lastName?: string;
     companyName?: string;
   }): Promise<{ userId: string; emailSent: boolean; preview?: boolean }> => {
-    const response = await fetch(`${API_URL}/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(userData)
-    });
-    
+    let response: Response;
+    try {
+      response = await fetch(`${API_URL}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(userData)
+      });
+    } catch (networkError) {
+      throw new Error('Impossible de contacter le serveur. Vérifiez votre connexion internet ou réessayez plus tard.');
+    }
+
     const data = await response.json();
-    
+
     if (data.success && data.data) {
       return data.data;
     }
     throw new Error(data.message || 'Erreur lors de l\'inscription');
   },
-  
+
   login: async (email: string, password: string): Promise<{ user: User; token: string; needsVerification?: boolean }> => {
     try {
       const response = await fetchWithAuth('/auth/login', {
@@ -139,7 +148,7 @@ export const authApi = {
       throw error;
     }
   },
-  
+
   resendVerification: async (email: string) => {
     const response = await fetchWithAuth('/auth/resend-verification', {
       method: 'POST',
@@ -150,11 +159,11 @@ export const authApi = {
     }
     return response.data;
   },
-  
+
   logout: () => {
     removeToken();
   },
-  
+
   getMe: async (): Promise<User> => {
     const response = await fetchWithAuth('/auth/me');
     if (response.success && response.data) {
@@ -162,7 +171,7 @@ export const authApi = {
     }
     throw new Error('Non authentifié');
   },
-  
+
   updateProfile: async (data: Partial<User>): Promise<User> => {
     const response = await fetchWithAuth('/auth/profile', {
       method: 'PUT',
@@ -173,7 +182,7 @@ export const authApi = {
     }
     throw new Error(response.message || 'Erreur');
   },
-  
+
   changePassword: async (currentPassword: string, newPassword: string): Promise<void> => {
     const response = await fetchWithAuth('/auth/password', {
       method: 'PUT',
@@ -183,7 +192,7 @@ export const authApi = {
       throw new Error(response.message || 'Erreur');
     }
   },
-  
+
   isAuthenticated: () => !!getToken()
 };
 
@@ -196,7 +205,7 @@ export const reportsApi = {
     }
     return [];
   },
-  
+
   getById: async (id: string): Promise<ApiReport> => {
     const response = await fetchWithAuth(`/reports/${id}`);
     if (response.success && response.data) {
@@ -204,8 +213,8 @@ export const reportsApi = {
     }
     throw new Error('Rapport non trouvé');
   },
-  
-  create: async (reportData: Omit<ApiReport, 'id' | 'createdAt' | 'extraWorks'> & { extraWorks?: any[] }): Promise<ApiReport> => {
+
+  create: async (reportData: Omit<ApiReport, 'id' | 'createdAt' | 'extraWorks'> & { extraWorks?: Omit<ApiReport['extraWorks'][number], 'id' | 'createdAt'>[] }): Promise<ApiReport> => {
     const response = await fetchWithAuth('/reports', {
       method: 'POST',
       body: JSON.stringify(reportData)
@@ -215,7 +224,7 @@ export const reportsApi = {
     }
     throw new Error(response.message || 'Erreur lors de la création');
   },
-  
+
   delete: async (id: string): Promise<void> => {
     const response = await fetchWithAuth(`/reports/${id}`, {
       method: 'DELETE'
@@ -224,7 +233,7 @@ export const reportsApi = {
       throw new Error(response.message || 'Erreur lors de la suppression');
     }
   },
-  
+
   getStats: async () => {
     const response = await fetchWithAuth('/reports/stats/summary');
     if (response.success && response.data) {
@@ -243,13 +252,13 @@ export const reportsApi = {
 export const migrateLocalReports = async (userId: string): Promise<number> => {
   const STORAGE_KEY = 'siteflow_reports_v1';
   const raw = localStorage.getItem(STORAGE_KEY);
-  
+
   if (!raw) return 0;
-  
+
   try {
     const localReports = JSON.parse(raw);
     if (!Array.isArray(localReports) || localReports.length === 0) return 0;
-    
+
     let migrated = 0;
     for (const report of localReports) {
       try {
@@ -262,12 +271,12 @@ export const migrateLocalReports = async (userId: string): Promise<number> => {
         console.error('Migration failed for report:', report.id);
       }
     }
-    
+
     // Supprimer les données locales après migration
     localStorage.removeItem(STORAGE_KEY);
     console.log(`✅ ${migrated} rapports migrés vers le compte`);
     return migrated;
-    
+
   } catch (e) {
     console.error('Migration error:', e);
     return 0;
@@ -286,7 +295,7 @@ export const sharesApi = {
     }
     return response.data;
   },
-  
+
   getReceived: async () => {
     const response = await fetchWithAuth('/shares/received');
     if (response.success && response.data) {
@@ -294,7 +303,7 @@ export const sharesApi = {
     }
     return [];
   },
-  
+
   getSent: async () => {
     const response = await fetchWithAuth('/shares/sent');
     if (response.success && response.data) {
@@ -302,7 +311,7 @@ export const sharesApi = {
     }
     return [];
   },
-  
+
   revoke: async (shareId: string) => {
     const response = await fetchWithAuth(`/shares/${shareId}`, {
       method: 'DELETE'
@@ -311,7 +320,7 @@ export const sharesApi = {
       throw new Error(response.message || 'Erreur');
     }
   },
-  
+
   accept: async (shareId: string) => {
     const response = await fetchWithAuth(`/shares/${shareId}/accept`, {
       method: 'PUT'
@@ -328,16 +337,16 @@ export const exportApi = {
     const params = new URLSearchParams();
     if (filters?.startDate) params.append('startDate', filters.startDate);
     if (filters?.endDate) params.append('endDate', filters.endDate);
-    
+
     const token = getToken();
     const response = await fetch(`${API_URL}/export/csv?${params}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
-    
+
     if (!response.ok) {
       throw new Error('Erreur lors du téléchargement CSV');
     }
-    
+
     const blob = await response.blob();
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -348,7 +357,7 @@ export const exportApi = {
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
   },
-  
+
   getExcelData: async (filters?: { startDate?: string; endDate?: string }) => {
     const params = new URLSearchParams();
     if (filters?.startDate) params.append('startDate', filters.startDate);

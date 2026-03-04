@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Trash2, Download, Euro, ClipboardList, Share2, FileSpreadsheet, CloudOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { generatePremiumPDF } from '../services/pdf-premium';
 import { ShareReportModal } from './ShareReportModal';
 import { ExportModal } from './ExportModal';
 import { branding } from '../config/branding';
@@ -12,7 +11,7 @@ import { useNavigate } from 'react-router-dom';
 
 export const HistoryView: React.FC = () => {
     const navigate = useNavigate();
-    const { reports, deleteReport, stats, isLoading } = useAuth();
+    const { reports, deleteReport, stats, isLoading, user } = useAuth();
     const [searchQuery, setSearchQuery] = useState('');
     const [downloadingId, setDownloadingId] = useState<string | null>(null);
     const [sharingReport, setSharingReport] = useState<ApiReport | null>(null);
@@ -43,6 +42,7 @@ export const HistoryView: React.FC = () => {
     const handleDownload = async (report: ApiReport) => {
         setDownloadingId(report.id);
         try {
+            const { generatePremiumPDF } = await import('../services/pdf-premium');
             await generatePremiumPDF({
                 imageDataUrl: report.imageDataUrl,
                 address: report.address,
@@ -52,7 +52,7 @@ export const HistoryView: React.FC = () => {
                 accuracy: report.accuracy,
                 locationSource: report.locationSource as 'gps' | 'demo' | 'unavailable',
                 reportId: report.reportId,
-                companyName: branding.companyName,
+                companyName: user?.companyName || branding.companyName,
                 reportTitle: branding.reportTitle,
                 productName: branding.productName,
                 logoUrl: branding.logoUrl,
@@ -98,17 +98,17 @@ export const HistoryView: React.FC = () => {
     }
 
     return (
-        <div className="view" style={{ maxWidth: '1200px', margin: '0 auto' }}>
+        <div className="view history-page">
             <motion.div
                 className="view__top"
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
             >
-                <button onClick={() => navigate('/')} className="link-btn" style={{ color: 'var(--text-muted)' }}>
+                <button onClick={() => navigate('/')} className="link-btn">
                     <ArrowLeft size={16} /> Retour
                 </button>
                 <div className="stepper">
-                    <span className="stepper__item stepper__item--active" style={{ color: 'var(--primary)' }}>Historique Cloud</span>
+                    <span className="stepper__item stepper__item--active">Historique Cloud</span>
                 </div>
             </motion.div>
 
@@ -119,16 +119,16 @@ export const HistoryView: React.FC = () => {
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 0.1 }}
             >
-                <div className="stat-card" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-light)' }}>
-                    <span className="stat-value" style={{ color: 'var(--text-main)' }}>{stats.totalReports}</span>
+                <div className="stat-card">
+                    <span className="stat-value">{stats.totalReports}</span>
                     <span className="stat-label">Rapports</span>
                 </div>
-                <div className="stat-card" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-light)' }}>
-                    <span className="stat-value" style={{ color: 'var(--warning)' }}>{stats.totalExtraWorks}</span>
+                <div className="stat-card">
+                    <span className="stat-value stat-value--warning">{stats.totalExtraWorks}</span>
                     <span className="stat-label">Travaux Supp.</span>
                 </div>
-                <div className="stat-card" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-light)' }}>
-                    <span className="stat-value" style={{ color: 'var(--success)' }}>{stats.totalExtraValue.toLocaleString('fr-FR')}€</span>
+                <div className="stat-card">
+                    <span className="stat-value stat-value--success">{stats.totalExtraValue.toLocaleString('fr-FR')}€</span>
                     <span className="stat-label">Valeur TS</span>
                 </div>
             </motion.div>
@@ -136,7 +136,6 @@ export const HistoryView: React.FC = () => {
             {/* Search */}
             <motion.div
                 className="history__search"
-                style={{ marginBottom: '24px' }}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.2 }}
@@ -147,28 +146,22 @@ export const HistoryView: React.FC = () => {
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Rechercher par chantier, client, adresse..."
                     className="input"
-                    style={{
-                        background: 'var(--bg-surface)',
-                        border: '1px solid var(--border-light)',
-                        height: '50px',
-                        fontSize: '1rem'
-                    }}
                 />
             </motion.div>
 
             {/* Liste */}
-            <section className="card history" style={{ background: 'transparent', padding: 0, boxShadow: 'none' }}>
-                <div className="history__header" style={{ marginBottom: '16px', paddingLeft: '4px' }}>
-                    <h2 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                        Mes Rapports <span style={{ color: 'var(--text-muted)', fontSize: '1rem' }}>({filteredReports.length})</span>
+            <section className="card history history-panel">
+                <div className="history__header history-panel__header">
+                    <h2>
+                        Mes rapports <span className="history-panel__count">({filteredReports.length})</span>
                     </h2>
                 </div>
 
                 {filteredReports.length === 0 ? (
-                    <div className="history__empty" style={{ background: 'var(--bg-surface)', padding: '4rem', borderRadius: 'var(--radius-md)' }}>
-                        <ClipboardList size={48} style={{ margin: '0 auto 16px', opacity: 0.5, color: 'var(--text-muted)' }} />
-                        <p style={{ color: 'var(--text-main)' }}>Aucun rapport trouvé.</p>
-                        <p className="detail-sub" style={{ marginTop: '8px' }}>
+                    <div className="history__empty history-panel__empty">
+                        <ClipboardList size={44} />
+                        <p>Aucun rapport trouve.</p>
+                        <p className="detail-sub">
                             {searchQuery ? 'Essayez une autre recherche' : 'Créez votre premier rapport'}
                         </p>
                     </div>
@@ -186,26 +179,21 @@ export const HistoryView: React.FC = () => {
                                     key={report.id}
                                     className={`history-card ${isLocal ? 'history-card--local' : ''}`}
                                     variants={itemVariants}
-                                    whileHover={{ y: -2, backgroundColor: 'var(--bg-surface-hover)' }}
-                                    style={{
-                                        background: 'var(--bg-surface)',
-                                        border: '1px solid var(--border-light)',
-                                        marginBottom: '12px'
-                                    }}
+                                    whileHover={{ y: -2 }}
                                 >
                                     <div className="history-card__media">
                                         {report.imageDataUrl ? (
-                                            <img src={report.imageDataUrl} alt="Aperçu" style={{ objectFit: 'cover' }} />
+                                            <img src={report.imageDataUrl} alt="Aperçu" />
                                         ) : (
                                             <div className="history-card__placeholder">Aperçu indisponible</div>
                                         )}
                                     </div>
                                     <div className="history-card__body">
                                         <div className="history-card__meta">
-                                            <span className="history-card__id" style={{ color: 'var(--primary)' }}>{report.reportId}</span>
-                                            <span className="history-card__date" style={{ color: 'var(--text-muted)' }}>{report.dateLabel}</span>
+                                            <span className="history-card__id">{report.reportId}</span>
+                                            <span className="history-card__date">{report.dateLabel}</span>
                                             {isLocal && (
-                                                <span className="badge badge--warning" style={{ marginTop: '4px' }}>
+                                                <span className="badge badge--warning history-card__sync-badge">
                                                     <CloudOff size={12} />
                                                     En attente de synchro
                                                 </span>
@@ -213,14 +201,14 @@ export const HistoryView: React.FC = () => {
                                         </div>
                                         <div className="history-card__details">
                                             {report.siteName && (
-                                                <span style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '1.1rem' }}>{report.siteName}</span>
+                                                <span className="history-card__site">{report.siteName}</span>
                                             )}
                                             {report.clientName && (
-                                                <span className="detail-sub" style={{ color: 'var(--text-muted)' }}>Client: {report.clientName}</span>
+                                                <span className="detail-sub">Client: {report.clientName}</span>
                                             )}
                                             <span className="detail-sub">{report.address}</span>
                                             {report.extraWorks && report.extraWorks.length > 0 && (
-                                                <span className="badge badge--info" style={{ marginTop: '4px', width: 'fit-content' }}>
+                                                <span className="badge badge--info history-card__ts">
                                                     <Euro size={12} />
                                                     {report.extraWorks.length} TS • {report.extraWorks.reduce((s, w) => s + w.estimatedCost, 0)}€
                                                 </span>
@@ -233,7 +221,6 @@ export const HistoryView: React.FC = () => {
                                             onClick={() => handleDownload(report)}
                                             disabled={downloadingId === report.id}
                                             title="Télécharger PDF"
-                                            style={{ color: 'var(--text-muted)' }}
                                         >
                                             {downloadingId === report.id ? '...' : <Download size={16} />}
                                         </button>
@@ -242,7 +229,6 @@ export const HistoryView: React.FC = () => {
                                             onClick={() => setSharingReport(report)}
                                             title="Partager"
                                             disabled={isLocal}
-                                            style={{ color: 'var(--text-muted)' }}
                                         >
                                             <Share2 size={16} />
                                         </button>
@@ -263,7 +249,7 @@ export const HistoryView: React.FC = () => {
 
             {/* Boutons d'export */}
             <motion.div
-                style={{ position: 'fixed', bottom: '24px', right: '24px', zIndex: 50 }}
+                className="history-export-fab"
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 whileHover={{ scale: 1.05 }}
@@ -272,12 +258,6 @@ export const HistoryView: React.FC = () => {
                 <button
                     onClick={() => setShowExport(true)}
                     className="btn btn--primary btn--pill"
-                    style={{
-                        padding: '16px 32px',
-                        boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
-                        border: '1px solid var(--border-light)',
-                        fontSize: '1.1rem'
-                    }}
                 >
                     <FileSpreadsheet size={20} />
                     <span>Exporter</span>

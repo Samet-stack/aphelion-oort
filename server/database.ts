@@ -66,14 +66,28 @@ export const initDb = async () => {
   console.log('📦 Initialisation PostgreSQL/Supabase...');
 
   try {
+    // Try to read and apply the schema (local dev / first deploy)
     const schemaSql = await readFile(SCHEMA_FILE, 'utf-8');
     await db.query(schemaSql);
     console.log('✅ Base PostgreSQL initialisée avec succès');
-  } catch (error) {
-    console.error('❌ Erreur initialisation PostgreSQL:', error.message);
-    throw error;
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      // Schema file not found (e.g. Vercel serverless env) — tables already exist, just test connection
+      console.log('ℹ️  Schema file not found, testing DB connection...');
+      try {
+        await db.query('SELECT 1');
+        console.log('✅ Connexion PostgreSQL OK');
+      } catch (connErr: any) {
+        console.error('❌ Erreur connexion PostgreSQL:', connErr.message);
+        throw connErr;
+      }
+    } else {
+      console.error('❌ Erreur initialisation PostgreSQL:', error.message);
+      throw error;
+    }
   }
 };
+
 
 export const query = async (sql, params = []) => {
   const db = getPool();

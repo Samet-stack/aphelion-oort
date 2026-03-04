@@ -185,6 +185,8 @@ model users {
   created_at                          DateTime              @default(now()) @db.Timestamptz(6)
   updated_at                          DateTime              @default(now()) @db.Timestamptz(6)
   last_login_at                       DateTime?             @db.Timestamptz(6)
+  reset_password_token                String?               @unique
+  reset_password_expires              DateTime?             @db.Timestamptz(6)
   email_verifications                 email_verifications[]
   extra_works                         extra_works[]
   plan_points                         plan_points[]
@@ -195,4 +197,5 @@ model users {
   sites                               sites[]
 
   @@index([email], map: "idx_users_email")
+  @@index([reset_password_token], map: "idx_users_reset_token")
 }

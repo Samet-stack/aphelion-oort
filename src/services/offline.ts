@@ -14,6 +14,7 @@ interface OfflineState {
 
 const SYNC_INTERVAL = 30000; // 30 secondes
 const MAX_SYNC_ATTEMPTS = 5;
+const FALLBACK_PLAN_POINTS_KEY = 'siteflow_offline_pending_plan_points';
 
 class OfflineService {
   private listeners: Set<(state: OfflineState) => void> = new Set();
@@ -144,14 +145,26 @@ class OfflineService {
   // Récupérer tous les points de plan en attente
   async getPendingPlanPoints(): Promise<PendingPlanPoint[]> {
     if (this.useFallback) {
-      // Fallback simpliste, on pourrait gérer via localStorage aussi mais pas requis
-      return [];
+      return this.getPendingPlanPointsFallback();
     }
     try {
       return await offlineDB.getAllPlanPoints();
     } catch (error) {
+      return this.getPendingPlanPointsFallback();
+    }
+  }
+
+  private async getPendingPlanPointsFallback(): Promise<PendingPlanPoint[]> {
+    try {
+      const raw = localStorage.getItem(FALLBACK_PLAN_POINTS_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
       return [];
     }
+  }
+
+  private async savePendingPlanPointsFallback(points: PendingPlanPoint[]): Promise<void> {
+    localStorage.setItem(FALLBACK_PLAN_POINTS_KEY, JSON.stringify(points));
   }
 
   // Sauvegarder un rapport en local (hors-ligne)
@@ -224,7 +237,14 @@ class OfflineService {
       syncAttempts: 0
     };
 
-    if (this.useFallback) return localId;
+    if (this.useFallback) {
+      const points = await this.getPendingPlanPointsFallback();
+      points.push(newPoint);
+      await this.savePendingPlanPointsFallback(points);
+      await this.updatePendingCount();
+      if (navigator.onLine) this.sync();
+      return localId;
+    }
 
     try {
       await offlineDB.addPlanPoint(newPoint);
@@ -238,7 +258,13 @@ class OfflineService {
   }
 
   private async removePendingPlanPoint(localId: string) {
-    if (this.useFallback) return;
+    if (this.useFallback) {
+      const points = await this.getPendingPlanPointsFallback();
+      const filtered = points.filter(p => p.localId !== localId);
+      await this.savePendingPlanPointsFallback(filtered);
+      await this.updatePendingCount();
+      return;
+    }
     try {
       await offlineDB.deletePlanPoint(localId);
       await this.updatePendingCount();
@@ -277,7 +303,15 @@ class OfflineService {
 
   // Mettre à jour un point de plan (pour les tentatives de synchro)
   private async updatePendingPlanPoint(point: PendingPlanPoint) {
-    if (this.useFallback) return;
+    if (this.useFallback) {
+      const points = await this.getPendingPlanPointsFallback();
+      const index = points.findIndex(p => p.localId === point.localId);
+      if (index !== -1) {
+        points[index] = point;
+        await this.savePendingPlanPointsFallback(points);
+      }
+      return;
+    }
     try {
       await offlineDB.updatePlanPoint(point);
     } catch (error) {
@@ -399,11 +433,13 @@ class OfflineService {
     try {
       if (this.useFallback) {
         localStorage.removeItem('siteflow_offline_pending');
+        localStorage.removeItem(FALLBACK_PLAN_POINTS_KEY);
       } else {
         try {
           await offlineDB.clear();
         } catch (error) {
           localStorage.removeItem('siteflow_offline_pending');
+          localStorage.removeItem(FALLBACK_PLAN_POINTS_KEY);
         }
       }
       await this.updatePendingCount();

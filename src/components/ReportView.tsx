@@ -2,10 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Download, MapPin, Loader2, ArrowLeft, FileText, Shield, Share2, Mic, Building2 } from 'lucide-react';
 import { generateDescription } from '../services/ai';
 import { getAddress, getLocation, LocationData } from '../services/geo';
-import { generatePremiumPDF } from '../services/pdf-premium';
 import { useAuth } from '../contexts/AuthContext';
 import { reportsApi } from '../services/api';
-import { generateIntegrityProof, type IntegrityProof, generateCertificateText } from '../services/crypto';
+import { generateIntegrityProof, type IntegrityProof } from '../services/crypto';
 import { ExtraWorkManager, type ExtraWorkItem } from './ExtraWork';
 import { ShareReportModal } from './ShareReport';
 import { VoiceRecorderComponent } from './VoiceRecorder';
@@ -96,7 +95,7 @@ const formatReportId = (date: Date) => {
 export const ReportView: React.FC = () => {
     const navigate = useNavigate();
     const { capturedImage, selectedPlan, resetApp } = useAppStore();
-    const { refreshReports, saveReportOffline } = useAuth();
+    const { refreshReports, saveReportOffline, user } = useAuth();
     const [analyzing, setAnalyzing] = useState(true);
     const [analysisStage, setAnalysisStage] = useState(0);
     const [imageUrl, setImageUrl] = useState<string>('');
@@ -257,22 +256,8 @@ export const ReportView: React.FC = () => {
                 quality: 0.82,
             });
 
-            // Ajouter description des TS et certificat d'intégrité
-            let finalDescription = description;
-            if (extraWorks.length > 0) {
-                const tsList = extraWorks.map(ts =>
-                    `- ${ts.description} (${ts.estimatedCost}€ HT) [${ts.category}]`
-                ).join('\n');
-                finalDescription += '\n\n--- TRAVAUX SUPPLEMENTAIRES ---\n' + tsList;
-                finalDescription += `\n\nTOTAL TS: ${extraWorks.reduce((s, t) => s + t.estimatedCost, 0)}€ HT`;
-                if (clientSignature) {
-                    finalDescription += '\n\nSignature client: OUI';
-                }
-            }
-
-            if (integrityProof) {
-                finalDescription += '\n\n--- CERTIFICATION ---\n' + generateCertificateText(integrityProof);
-            }
+            // Description propre sans doublons (le PDF gere les sections TS et Certification separement)
+            const finalDescription = description;
 
             // Préparer les données du rapport
             const reportPayload = {
@@ -314,6 +299,7 @@ export const ReportView: React.FC = () => {
             }
 
             // Générer le PDF
+            const { generatePremiumPDF } = await import('../services/pdf-premium');
             await generatePremiumPDF({
                 imageDataUrl,
                 address: reportData.address,
@@ -323,7 +309,7 @@ export const ReportView: React.FC = () => {
                 accuracy: reportData.accuracy,
                 locationSource: reportData.locationSource,
                 reportId: reportData.reportId,
-                companyName: branding.companyName,
+                companyName: user?.companyName || branding.companyName,
                 reportTitle: branding.reportTitle,
                 productName: branding.productName,
                 logoUrl: branding.logoUrl,
@@ -446,31 +432,18 @@ export const ReportView: React.FC = () => {
             </div>
 
             {/* Info du chantier */}
-            <div className="card mb-4" style={{
-                background: 'rgba(255, 183, 3, 0.1)',
-                borderColor: 'rgba(255, 183, 3, 0.3)',
-                padding: '16px 20px'
-            }}>
-                <div className="flex items-center gap-3">
-                    <div style={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: 10,
-                        background: 'rgba(255, 183, 3, 0.2)',
-                        display: 'grid',
-                        placeItems: 'center'
-                    }}>
+            <div className="selected-plan-banner">
+                <div className="selected-plan-banner__icon">
                         <Building2 size={20} color="#ffb703" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <h3 style={{ fontWeight: 600, fontSize: '1rem', marginBottom: 2 }}>
+                </div>
+                <div className="selected-plan-banner__content">
+                        <h3>
                             {selectedPlan.siteName}
                         </h3>
-                        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>
-                            <MapPin size={12} style={{ display: 'inline', marginRight: 4 }} />
+                        <p>
+                            <MapPin size={12} />
                             {selectedPlan.address || 'Adresse non renseignée'}
                         </p>
-                    </div>
                 </div>
             </div>
 

@@ -1,5 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { X, Camera, Upload } from 'lucide-react';
+import { toast } from 'react-hot-toast';
+import { normalizeFileToImageDataUrl, getFileConversionErrorMessage } from '../services/file-conversion';
 
 export interface PlanPointFormData {
   title: string;
@@ -35,34 +37,12 @@ const statusOptions = [
   { id: 'termine', label: 'Termine' },
 ] as const;
 
-const fileToDataUrl = (file: File, maxW = 1200, maxH = 900, quality = 0.8): Promise<string> => {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let w = img.width;
-        let h = img.height;
-        if (w > maxW || h > maxH) {
-          const ratio = Math.min(maxW / w, maxH / h);
-          w = Math.round(w * ratio);
-          h = Math.round(h * ratio);
-        }
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d')!;
-        ctx.drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL('image/jpeg', quality));
-      };
-      img.src = e.target?.result as string;
-    };
-    reader.readAsDataURL(file);
-  });
-};
+// The old `fileToDataUrl` has been removed as we now use `normalizeFileToImageDataUrl`.
 
 export const PlanPointForm: React.FC<PlanPointFormProps> = ({ onSave, onClose, initialData, isEdit }) => {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [processingFile, setProcessingFile] = useState(false);
   const [title, setTitle] = useState(initialData?.title || '');
   const [description, setDescription] = useState(initialData?.description || '');
   const [category, setCategory] = useState(initialData?.category || 'autre');
@@ -75,8 +55,26 @@ export const PlanPointForm: React.FC<PlanPointFormProps> = ({ onSave, onClose, i
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const dataUrl = await fileToDataUrl(e.target.files[0]);
-      setPhotoDataUrl(dataUrl);
+      try {
+        setProcessingFile(true);
+        const file = e.target.files[0];
+        const { dataUrl, sourceType } = await normalizeFileToImageDataUrl(file, {
+          maxWidth: 1600,
+          maxHeight: 1600,
+          quality: 0.85,
+        });
+
+        setPhotoDataUrl(dataUrl);
+        if (sourceType === 'pdf') {
+          toast.success('PDF importé. Page 1 convertie en image.');
+        }
+      } catch (err) {
+        console.error('Error processing point file:', err);
+        toast.error(getFileConversionErrorMessage(err));
+      } finally {
+        setProcessingFile(false);
+        e.target.value = ''; // Reset input
+      }
     }
   };
 
@@ -107,33 +105,45 @@ export const PlanPointForm: React.FC<PlanPointFormProps> = ({ onSave, onClose, i
         <div className="modal__body" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {/* Photo */}
           <div className="form-field" style={{ marginBottom: '4px' }}>
-            <label style={{ display: 'block', marginBottom: '10px', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)' }}>Photo *</label>
+            <label style={{ display: 'block', marginBottom: '10px', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)' }}>Photo / Document *</label>
             <input
               type="file"
               accept="image/*"
               capture="environment"
-              ref={inputRef}
+              ref={cameraInputRef}
               onChange={handleFileChange}
               className="hidden"
             />
-            {photoDataUrl ? (
+            <input
+              type="file"
+              accept="image/*,application/pdf"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              className="hidden"
+            />
+            {processingFile ? (
+              <div style={{ padding: '20px', textAlign: 'center', background: 'var(--surface-strong)', borderRadius: 'var(--radius-md)' }}>
+                <p style={{ color: 'var(--text-muted)' }}>Traitement du fichier...</p>
+              </div>
+            ) : photoDataUrl ? (
               <div style={{ position: 'relative' }}>
                 <img src={photoDataUrl} alt="Preview" className="point-photo-preview" style={{ marginBottom: '12px' }} />
                 <button
                   className="btn btn--ghost"
-                  onClick={() => inputRef.current?.click()}
+                  onClick={() => fileInputRef.current?.click()}
                   style={{ width: '100%' }}
+                  disabled={processingFile}
                 >
-                  <Camera size={16} /> Changer la photo
+                  <Camera size={16} /> Changer le document
                 </button>
               </div>
             ) : (
               <div className="camera__actions" style={{ gap: '12px' }}>
-                <button className="btn btn--primary" onClick={() => inputRef.current?.click()}>
+                <button className="btn btn--primary" onClick={() => cameraInputRef.current?.click()} disabled={processingFile}>
                   <Camera size={16} /> Prendre une photo
                 </button>
-                <button className="btn btn--ghost" onClick={() => inputRef.current?.click()}>
-                  <Upload size={16} /> Importer
+                <button className="btn btn--ghost" onClick={() => fileInputRef.current?.click()} disabled={processingFile}>
+                  <Upload size={16} /> Importer image/PDF
                 </button>
               </div>
             )}

@@ -1,13 +1,17 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Camera, Upload, ArrowLeft, MapPin, Building2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
 import { useAppStore } from '../store/useAppStore';
+import { getFileConversionErrorMessage, normalizeFileToImageFile } from '../services/file-conversion';
 
 export const CameraView: React.FC = () => {
     const navigate = useNavigate();
     const { selectedPlan, setCapturedImage } = useAppStore();
-    const inputRef = useRef<HTMLInputElement>(null);
+    const cameraInputRef = useRef<HTMLInputElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const [isDragging, setIsDragging] = useState(false);
+    const [processingFile, setProcessingFile] = useState(false);
 
     useEffect(() => {
         if (!selectedPlan) {
@@ -17,19 +21,41 @@ export const CameraView: React.FC = () => {
 
     if (!selectedPlan) return null;
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            setCapturedImage(e.target.files[0]);
+    const handleSelectedFile = async (file: File) => {
+        try {
+            setProcessingFile(true);
+            const { file: normalizedFile, sourceType } = await normalizeFileToImageFile(file, {
+                maxWidth: 2200,
+                maxHeight: 2200,
+                quality: 0.86,
+            });
+
+            if (sourceType === 'pdf') {
+                toast.success('PDF importe. Page 1 convertie en image pour le rapport.');
+            }
+
+            setCapturedImage(normalizedFile);
             navigate('/report');
+        } catch (err) {
+            console.error('Error processing capture file:', err);
+            toast.error(getFileConversionErrorMessage(err));
+        } finally {
+            setProcessingFile(false);
         }
     };
 
-    const handleDrop = (e: React.DragEvent) => {
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        await handleSelectedFile(file);
+        e.target.value = '';
+    };
+
+    const handleDrop = async (e: React.DragEvent) => {
         e.preventDefault();
         setIsDragging(false);
         if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-            setCapturedImage(e.dataTransfer.files[0]);
-            navigate('/report');
+            await handleSelectedFile(e.dataTransfer.files[0]);
         }
     };
 
@@ -47,45 +73,40 @@ export const CameraView: React.FC = () => {
             </div>
 
             {/* Info du chantier sélectionné */}
-            <div className="card mb-4" style={{
-                background: 'rgba(255, 183, 3, 0.1)',
-                borderColor: 'rgba(255, 183, 3, 0.3)',
-                padding: '16px 20px'
-            }}>
-                <div className="flex items-center gap-3">
-                    <div style={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: 10,
-                        background: 'rgba(255, 183, 3, 0.2)',
-                        display: 'grid',
-                        placeItems: 'center'
-                    }}>
+            <div className="selected-plan-banner">
+                <div className="selected-plan-banner__icon">
                         <Building2 size={20} color="#ffb703" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <h3 style={{ fontWeight: 600, fontSize: '1rem', marginBottom: 2 }}>
+                </div>
+                <div className="selected-plan-banner__content">
+                        <h3>
                             {selectedPlan.siteName}
                         </h3>
-                        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>
-                            <MapPin size={12} style={{ display: 'inline', marginRight: 4 }} />
+                        <p>
+                            <MapPin size={12} />
                             {selectedPlan.address || 'Adresse non renseignée'}
                         </p>
-                    </div>
                 </div>
             </div>
 
             <div className="card camera">
                 <div className="camera__header">
                     <h2>Nouvelle capture terrain</h2>
-                    <p>Photographiez l&apos;anomalie ou importez une image existante pour ce chantier.</p>
+                    <p>Photographiez l&apos;anomalie ou importez une image/PDF pour ce chantier.</p>
                 </div>
 
                 <input
                     type="file"
                     accept="image/*"
                     capture="environment"
-                    ref={inputRef}
+                    ref={cameraInputRef}
+                    onChange={handleFileChange}
+                    className="hidden"
+                />
+
+                <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    ref={fileInputRef}
                     onChange={handleFileChange}
                     className="hidden"
                 />
@@ -98,23 +119,25 @@ export const CameraView: React.FC = () => {
                     }}
                     onDragLeave={() => setIsDragging(false)}
                     onDrop={handleDrop}
-                    onClick={() => inputRef.current?.click()}
+                    onClick={() => !processingFile && fileInputRef.current?.click()}
                 >
                     <div className="dropzone__icon">
-                        <Camera size={28} />
+                        {processingFile ? <Upload size={28} className="spin" /> : <Camera size={28} />}
                     </div>
-                    <p className="dropzone__title">Deposez la photo ou touchez pour capturer</p>
-                    <p className="dropzone__hint">Formats JPG, PNG. Qualite recommandee 1080p.</p>
+                    <p className="dropzone__title">
+                        {processingFile ? 'Traitement du fichier en cours...' : 'Deposez la photo/PDF ou cliquez pour importer'}
+                    </p>
+                    <p className="dropzone__hint">Formats JPG, PNG, PDF. Le PDF utilise automatiquement sa page 1.</p>
                 </div>
 
                 <div className="camera__actions">
-                    <button className="btn btn--primary" onClick={() => inputRef.current?.click()}>
+                    <button className="btn btn--primary" onClick={() => cameraInputRef.current?.click()} disabled={processingFile}>
                         <Camera size={18} />
                         Ouvrir la camera
                     </button>
-                    <button className="btn btn--ghost" onClick={() => inputRef.current?.click()}>
+                    <button className="btn btn--ghost" onClick={() => fileInputRef.current?.click()} disabled={processingFile}>
                         <Upload size={18} />
-                        Importer un fichier
+                        Importer image/PDF
                     </button>
                 </div>
             </div>

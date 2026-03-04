@@ -28,7 +28,7 @@ export const VerifyEmail: React.FC = () => {
           setMessage(data.message);
           // Redirection vers login après 3s
           setTimeout(() => {
-            navigate('/login');
+            navigate('/', { replace: true });
           }, 3000);
         } else {
           setStatus('error');
@@ -76,7 +76,7 @@ export const VerifyEmail: React.FC = () => {
               <h2 className="text-xl font-bold mb-2 text-red-500">Erreur</h2>
               <p className="text-text-muted mb-6">{message}</p>
               <button
-                onClick={() => navigate('/login')}
+                onClick={() => navigate('/', { replace: true })}
                 className="btn btn--primary"
               >
                 Retour à la connexion

@@ -61,55 +61,32 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
   };
 
   return (
-    <div className="view view--centered">
-      <div className="auth-container" style={{ maxWidth: '400px', margin: '0 auto', width: '100%' }}>
-        {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <div style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: '1rem',
-          }}>
+    <div className="view view--centered auth-shell">
+      <div className="auth-container auth-card">
+        <div className="auth-brand">
+          <div className="auth-logo">
             <img
               src="/logo.png"
               alt="SiteFlow Pro"
-              style={{
-                width: '80px',
-                height: '80px',
-                objectFit: 'contain',
-                filter: 'drop-shadow(0 0 20px rgba(255, 183, 3, 0.3))'
-              }}
+              className="auth-logo__img"
             />
           </div>
-          <h1 style={{ fontSize: '2rem', fontWeight: 'bold', fontFamily: 'var(--font-display)', color: 'var(--color-text-primary)' }}>SiteFlow Pro</h1>
-          <p style={{ color: 'var(--color-text-secondary)', marginTop: '0.5rem' }}>Créez votre compte professionnel</p>
+          <h1 className="auth-title">Creer un compte</h1>
+          <p className="auth-subtitle">Invitez votre equipe et centralisez vos rapports terrain.</p>
         </div>
 
-        {/* Form */}
         <div className="card">
           {error && (
-            <div style={{
-              marginBottom: '1rem',
-              padding: '0.75rem',
-              borderRadius: '8px',
-              background: 'rgba(239, 68, 68, 0.2)',
-              border: '1px solid rgba(239, 68, 68, 0.5)',
-              color: '#f87171',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              fontSize: '0.875rem'
-            }}>
+            <div className="auth-alert auth-alert--error">
               <AlertCircle size={16} />
               {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <form onSubmit={handleSubmit} className="auth-form">
+            <div className="auth-grid-two">
               <div className="form-field">
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-text-secondary)', marginBottom: '0.25rem', fontSize: '0.875rem' }}>
+                <label className="auth-label">
                   <User size={14} />
                   Prénom
                 </label>
@@ -124,7 +101,7 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
               </div>
 
               <div className="form-field">
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-text-secondary)', marginBottom: '0.25rem', fontSize: '0.875rem' }}>
+                <label className="auth-label">
                   <User size={14} />
                   Nom
                 </label>
@@ -140,7 +117,7 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
             </div>
 
             <div className="form-field">
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-text-secondary)', marginBottom: '0.25rem', fontSize: '0.875rem' }}>
+              <label className="auth-label">
                 <Briefcase size={14} />
                 Entreprise
               </label>
@@ -155,7 +132,7 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
             </div>
 
             <div className="form-field">
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-text-secondary)', marginBottom: '0.25rem', fontSize: '0.875rem' }}>
+              <label className="auth-label">
                 <Mail size={14} />
                 Email
               </label>
@@ -171,7 +148,7 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
             </div>
 
             <div className="form-field">
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-text-secondary)', marginBottom: '0.25rem', fontSize: '0.875rem' }}>
+              <label className="auth-label">
                 <Lock size={14} />
                 Mot de passe
               </label>
@@ -185,11 +162,11 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
                 required
                 minLength={6}
               />
-              <p style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', marginTop: '0.25rem' }}>Minimum 6 caractères</p>
+              <p className="auth-field-help">Minimum 6 caractères</p>
             </div>
 
             <div className="form-field">
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-text-secondary)', marginBottom: '0.25rem', fontSize: '0.875rem' }}>
+              <label className="auth-label">
                 <Lock size={14} />
                 Confirmer le mot de passe
               </label>
@@ -208,7 +185,6 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
               type="submit"
               disabled={isLoading}
               className="btn btn--primary"
-              style={{ width: '100%', marginTop: '0.5rem' }}
             >
               {isLoading ? (
                 'Inscription...'
@@ -221,12 +197,12 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
             </button>
           </form>
 
-          <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
-            <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
+          <div className="auth-switch">
+            <p>
               Déjà un compte ?{' '}
               <button
                 onClick={onSwitchToLogin}
-                style={{ color: 'var(--color-primary)', fontWeight: '500', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+                className="auth-link-btn"
               >
                 Se connecter
               </button>
@@ -234,8 +210,7 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
           </div>
         </div>
 
-        {/* Info */}
-        <div style={{ marginTop: '1.5rem', textAlign: 'center', fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
+        <div className="auth-footer-note">
           <p>
             En créant un compte, vous acceptez nos conditions d'utilisation.
             <br />

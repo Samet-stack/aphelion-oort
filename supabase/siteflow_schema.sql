@@ -28,7 +28,9 @@ create table if not exists public.users (
   email_verified boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  last_login_at timestamptz
+  last_login_at timestamptz,
+  reset_password_token text unique,
+  reset_password_expires timestamptz
 );
 
 drop trigger if exists trg_users_updated_at on public.users;

@@ -7,6 +7,8 @@ import { generatePlanPDF } from '../services/plan-pdf';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
+import { useAuth } from '../contexts/AuthContext';
+import { getFileConversionErrorMessage, normalizeFileToImageDataUrl } from '../services/file-conversion';
 
 type SubView = 'LIST' | 'UPLOAD' | 'VIEWER';
 
@@ -33,34 +35,6 @@ const categoryLabels: Record<string, string> = {
   autre: 'Autre',
 };
 
-const fileToDataUrl = (file: File, maxW = 2000, maxH = 2000, quality = 0.8): Promise<string> => {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let w = img.width;
-        let h = img.height;
-        if (w > maxW || h > maxH) {
-          const ratio = Math.min(maxW / w, maxH / h);
-          w = Math.round(w * ratio);
-          h = Math.round(h * ratio);
-        }
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d')!;
-        ctx.drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL('image/jpeg', quality));
-      };
-      img.src = e.target?.result as string;
-    };
-    reader.readAsDataURL(file);
-  });
-};
-
-import { useAuth } from '../contexts/AuthContext';
-
 export const PlanView: React.FC = () => {
   const navigate = useNavigate();
   const { offlineState, getCachedPlans, saveCachedPlan, getAllPlanPointsForPlan, savePlanPointOffline } = useAuth();
@@ -80,6 +54,9 @@ export const PlanView: React.FC = () => {
   const [uploadSiteName, setUploadSiteName] = useState('');
   const [uploadAddress, setUploadAddress] = useState('');
   const [uploadImageDataUrl, setUploadImageDataUrl] = useState('');
+  const [uploadSourceType, setUploadSourceType] = useState<'image' | 'pdf' | null>(null);
+  const [uploadSourceName, setUploadSourceName] = useState('');
+  const [processingUpload, setProcessingUpload] = useState(false);
   const [uploading, setUploading] = useState(false);
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -104,6 +81,7 @@ export const PlanView: React.FC = () => {
   // Load plans on mount
   useEffect(() => {
     loadPlans();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offlineState.isOnline]);
 
   const loadPlans = async () => {
@@ -190,8 +168,27 @@ export const PlanView: React.FC = () => {
 
   // Upload handlers
   const handleUploadFile = async (file: File) => {
-    const dataUrl = await fileToDataUrl(file);
-    setUploadImageDataUrl(dataUrl);
+    try {
+      setProcessingUpload(true);
+      const { dataUrl, sourceType } = await normalizeFileToImageDataUrl(file, {
+        maxWidth: 2200,
+        maxHeight: 2200,
+        quality: 0.85,
+      });
+
+      setUploadImageDataUrl(dataUrl);
+      setUploadSourceType(sourceType);
+      setUploadSourceName(file.name);
+
+      if (sourceType === 'pdf') {
+        toast.success('PDF importe. Page 1 utilisee comme plan.');
+      }
+    } catch (err) {
+      console.error('Error processing file:', err);
+      toast.error(getFileConversionErrorMessage(err));
+    } finally {
+      setProcessingUpload(false);
+    }
   };
 
   const handleUploadDrop = (e: React.DragEvent) => {
@@ -217,6 +214,8 @@ export const PlanView: React.FC = () => {
       setUploadSiteName('');
       setUploadAddress('');
       setUploadImageDataUrl('');
+      setUploadSourceType(null);
+      setUploadSourceName('');
     } catch (err) {
       console.error('Error creating plan:', err);
       toast.error('Erreur lors de la creation du plan.');
@@ -467,10 +466,10 @@ export const PlanView: React.FC = () => {
           <div className="plan-upload">
             {/* Plan image */}
             <div className="form-field">
-              <label>Image du plan *</label>
+              <label>Plan (image ou PDF) *</label>
               <input
                 type="file"
-                accept="image/*"
+                accept="image/*,application/pdf"
                 ref={uploadInputRef}
                 onChange={async (e) => {
                   if (e.target.files && e.target.files[0]) {
@@ -479,17 +478,33 @@ export const PlanView: React.FC = () => {
                 }}
                 className="hidden"
               />
-              {uploadImageDataUrl ? (
+              {processingUpload ? (
+                <div className="dropzone dropzone--active" style={{ cursor: 'default' }}>
+                  <div className="dropzone__icon"><Loader2 size={28} className="spin" /></div>
+                  <p className="dropzone__title">Traitement du fichier en cours...</p>
+                  <p className="dropzone__hint">Conversion optimisee pour affichage sur plan</p>
+                </div>
+              ) : uploadImageDataUrl ? (
                 <div>
                   <div className="plan-upload__preview">
                     <img src={uploadImageDataUrl} alt="Preview" />
                   </div>
+                  {uploadSourceType === 'pdf' && (
+                    <p className="detail-sub" style={{ marginTop: '8px' }}>
+                      PDF detecte: seule la page 1 est utilisee comme fond de plan.
+                    </p>
+                  )}
+                  {uploadSourceName && (
+                    <p className="detail-sub" style={{ marginTop: '4px' }}>
+                      Fichier: {uploadSourceName}
+                    </p>
+                  )}
                   <button
                     className="btn btn--ghost"
                     onClick={() => uploadInputRef.current?.click()}
                     style={{ marginTop: '8px', width: '100%' }}
                   >
-                    <Camera size={16} /> Changer l'image
+                    <Camera size={16} /> Changer le fichier
                   </button>
                 </div>
               ) : (
@@ -502,7 +517,7 @@ export const PlanView: React.FC = () => {
                 >
                   <div className="dropzone__icon"><Upload size={28} /></div>
                   <p className="dropzone__title">Deposez le plan ou cliquez pour importer</p>
-                  <p className="dropzone__hint">Formats JPG, PNG</p>
+                  <p className="dropzone__hint">Formats JPG, PNG, PDF</p>
                 </div>
               )}
             </div>
@@ -534,10 +549,10 @@ export const PlanView: React.FC = () => {
             <button
               className="btn btn--primary"
               onClick={handleUploadSubmit}
-              disabled={!uploadSiteName.trim() || !uploadImageDataUrl || uploading}
+              disabled={!uploadSiteName.trim() || !uploadImageDataUrl || uploading || processingUpload}
               style={{ width: '100%' }}
             >
-              {uploading ? <><Loader2 size={16} className="spin" /> Creation...</> : 'Creer le plan'}
+              {uploading ? <><Loader2 size={16} className="spin" /> Creation...</> : processingUpload ? 'Traitement du fichier...' : 'Creer le plan'}
             </button>
           </div>
         </div>

@@ -7,7 +7,8 @@ import {
   generateEmailVerification,
   verifyEmailToken,
   sendVerificationEmail,
-  sendWelcomeEmail
+  sendWelcomeEmail,
+  sendPasswordResetEmail
 } from '../services/email.js';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
@@ -327,6 +328,114 @@ router.put('/password', authMiddleware, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erreur lors du changement de mot de passe.'
+    });
+  }
+});
+
+// Forgot Password
+router.post('/forgot-password', authLimiter, async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email requis.'
+      });
+    }
+
+    const user = await get('SELECT id, first_name FROM users WHERE email = ?', [email.toLowerCase()]);
+
+    // Pour des raisons de sécurité, nous renvoyons un succès même si l'email n'existe pas.
+    if (!user) {
+      return res.json({
+        success: true,
+        message: 'Si cet email correspond à un compte, un lien de réinitialisation vous a été envoyé.'
+      });
+    }
+
+    // Générer un token unique pour le reset
+    const resetToken = uuidv4();
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 1); // Expiration dans 1 heure
+
+    // Mettre à jour l'utilisateur en base avec ce token
+    await run(
+      'UPDATE users SET reset_password_token = ?, reset_password_expires = ? WHERE id = ?',
+      [resetToken, expiresAt.toISOString(), user.id]
+    );
+
+    // Envoyer l'email
+    const emailResult = await sendPasswordResetEmail(email.toLowerCase(), resetToken, user.firstName);
+
+    res.json({
+      success: true,
+      message: 'Si cet email correspond à un compte, un lien de réinitialisation vous a été envoyé.',
+      data: {
+        emailSent: emailResult.success,
+        preview: emailResult.preview || false
+      }
+    });
+
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Une erreur est survenue.'
+    });
+  }
+});
+
+// Reset Password
+const resetPasswordSchema = z.object({
+  token: z.string().min(1, 'Token manquant.'),
+  newPassword: z.string().min(6, 'Le mot de passe doit contenir au moins 6 caractères.')
+});
+
+router.post('/reset-password', authLimiter, async (req, res) => {
+  try {
+    const parsed = resetPasswordSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: (parsed.error as any).errors[0].message
+      });
+    }
+
+    const { token, newPassword } = parsed.data;
+
+    // Rechercher l'utilisateur avec ce token et s'assurer qu'il n'est pas expiré
+    const user = await get(
+      'SELECT id FROM users WHERE reset_password_token = ? AND reset_password_expires > NOW()',
+      [token]
+    );
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: 'Le lien de réinitialisation est invalide ou a expiré.'
+      });
+    }
+
+    // Hasher le nouveau mot de passe
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Mettre à jour le mot de passe et supprimer le token
+    await run(
+      'UPDATE users SET password = ?, reset_password_token = NULL, reset_password_expires = NULL, updated_at = NOW() WHERE id = ?',
+      [hashedPassword, user.id]
+    );
+
+    res.json({
+      success: true,
+      message: 'Votre mot de passe a été réinitialisé avec succès.'
+    });
+
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Une erreur est survenue lors de la réinitialisation.'
     });
   }
 });

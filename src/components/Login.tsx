@@ -38,54 +38,31 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
   };
 
   return (
-    <div className="view view--centered">
-      <div className="auth-container" style={{ maxWidth: '400px', margin: '0 auto', width: '100%' }}>
-        {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <div style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: '1rem',
-          }}>
+    <div className="view view--centered auth-shell">
+      <div className="auth-container auth-card">
+        <div className="auth-brand">
+          <div className="auth-logo">
             <img
               src="/logo.png"
               alt="SiteFlow Pro"
-              style={{
-                width: '80px',
-                height: '80px',
-                objectFit: 'contain',
-                filter: 'drop-shadow(0 0 20px rgba(255, 183, 3, 0.3))'
-              }}
+              className="auth-logo__img"
             />
           </div>
-          <h1 style={{ fontSize: '2rem', fontWeight: 'bold', fontFamily: 'var(--font-display)', color: 'var(--color-text-primary)' }}>SiteFlow Pro</h1>
-          <p style={{ color: 'var(--color-text-secondary)', marginTop: '0.5rem' }}>Connectez-vous à votre compte</p>
+          <h1 className="auth-title">SiteFlow Pro</h1>
+          <p className="auth-subtitle">Connectez-vous a votre compte pour reprendre vos chantiers.</p>
         </div>
 
-        {/* Form */}
         <div className="card">
           {error && (
-            <div style={{
-              marginBottom: '1rem',
-              padding: '0.75rem',
-              borderRadius: '8px',
-              background: 'rgba(239, 68, 68, 0.2)',
-              border: '1px solid rgba(239, 68, 68, 0.5)',
-              color: '#f87171',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              fontSize: '0.875rem'
-            }}>
+            <div className="auth-alert auth-alert--error">
               <AlertCircle size={16} />
               {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <form onSubmit={handleSubmit} className="auth-form">
             <div className="form-field">
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-text-secondary)', marginBottom: '0.25rem', fontSize: '0.875rem' }}>
+              <label className="auth-label">
                 <Mail size={14} />
                 Email
               </label>
@@ -100,7 +77,7 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
             </div>
 
             <div className="form-field">
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-text-secondary)', marginBottom: '0.25rem', fontSize: '0.875rem' }}>
+              <label className="auth-label">
                 <Lock size={14} />
                 Mot de passe
               </label>
@@ -113,13 +90,21 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
                 required
                 minLength={6}
               />
+              <div className="auth-forgot-wrap">
+                <button
+                  type="button"
+                  onClick={() => navigate('/forgot-password')}
+                  className="auth-link-btn"
+                >
+                  Mot de passe oublié ?
+                </button>
+              </div>
             </div>
 
             <button
               type="submit"
               disabled={isLoading}
               className="btn btn--primary"
-              style={{ width: '100%', marginTop: '0.5rem' }}
             >
               {isLoading ? (
                 'Connexion...'
@@ -132,12 +117,12 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
             </button>
           </form>
 
-          <div style={{ marginTop: '1.5rem', textAlign: 'center' }}>
-            <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
+          <div className="auth-switch">
+            <p>
               Pas encore de compte ?{' '}
               <button
                 onClick={onSwitchToRegister}
-                style={{ color: 'var(--color-primary)', fontWeight: '500', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+                className="auth-link-btn"
               >
                 Créer un compte
               </button>
@@ -145,18 +130,17 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
           </div>
         </div>
 
-        {/* Features */}
-        <div style={{ marginTop: '2rem', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', textAlign: 'center', fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
+        <div className="auth-features">
           <div>
-            <div style={{ fontSize: '1.25rem', marginBottom: '0.25rem' }}>🔒</div>
+            <div className="auth-features__emoji">🔒</div>
             Données sécurisées
           </div>
           <div>
-            <div style={{ fontSize: '1.25rem', marginBottom: '0.25rem' }}>☁️</div>
+            <div className="auth-features__emoji">☁️</div>
             Sauvegarde cloud
           </div>
           <div>
-            <div style={{ fontSize: '1.25rem', marginBottom: '0.25rem' }}>📱</div>
+            <div className="auth-features__emoji">📱</div>
             Accès multi-appareils
           </div>
         </div>

@@ -10,6 +10,8 @@ import { PlanView } from './components/PlanView';
 import { PlanSelector } from './components/PlanSelector';
 import { VerifyEmail } from './components/VerifyEmail';
 import { RegisterSuccess } from './components/RegisterSuccess';
+import { ForgotPassword } from './components/ForgotPassword';
+import { ResetPassword } from './components/ResetPassword';
 import { ProtectedRoute } from './components/ProtectedRoute';
 
 function App() {
@@ -30,6 +32,8 @@ function App() {
             {/* Public routes */}
             <Route path="/register-success" element={<RegisterSuccess />} />
             <Route path="/verify-email" element={<VerifyEmail />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </AnimatePresence>

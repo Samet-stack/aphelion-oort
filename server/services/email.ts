@@ -199,3 +199,63 @@ export const sendWelcomeEmail = async (email, firstName = '') => {
     return { success: false };
   }
 };
+
+// Envoyer email de réinitialisation de mot de passe
+export const sendPasswordResetEmail = async (email, token, firstName = '') => {
+  const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${token}`;
+
+  const htmlContent = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+      <div style="background: linear-gradient(135deg, #ffb703, #f97316); padding: 30px; text-align: center;">
+        <h1 style="color: white; margin: 0; font-size: 24px;">🏗️ SiteFlow Pro</h1>
+      </div>
+      <div style="padding: 30px;">
+        <h2>Bonjour ${firstName || ''},</h2>
+        <p>Vous avez demandé la réinitialisation de votre mot de passe sur SiteFlow Pro.</p>
+        <p>Cliquez sur le lien ci-dessous pour choisir un nouveau mot de passe :</p>
+        
+        <center>
+          <a href="${resetUrl}" style="display: inline-block; background: #ffb703; color: #000; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0;">
+            🔒 Réinitialiser mon mot de passe
+          </a>
+        </center>
+        
+        <p>Ou copiez-collez ce lien dans votre navigateur :</p>
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; word-break: break-all; font-family: monospace; font-size: 12px; margin: 10px 0;">${resetUrl}</div>
+        
+        <p style="color: #6c757d; font-size: 14px;">Ce lien est valable 1 heure.</p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+        <p style="font-size: 14px;">Si vous n'avez pas fait cette demande, vous pouvez ignorer cet email. Votre mot de passe restera inchangé.</p>
+      </div>
+    </div>
+  `;
+
+  const mailOptions = {
+    from: `"SiteFlow Pro" <${process.env.SMTP_FROM || 'noreply@siteflow.pro'}>`,
+    to: email,
+    subject: '🔒 Réinitialisation de votre mot de passe - SiteFlow Pro',
+    html: htmlContent,
+    text: `Bonjour,\n\nVous avez demandé la réinitialisation de votre mot de passe sur SiteFlow Pro.\n\nCliquez sur ce lien pour choisir un nouveau mot de passe : ${resetUrl}\n\nCe lien est valable 1 heure.\n\nSi vous n'avez pas fait cette demande, ignorez cet email.`
+  };
+
+  try {
+    if (!process.env.SMTP_USER) {
+      console.log('');
+      console.log('📧 EMAIL DE RÉINITIALISATION DE MOT DE PASSE (Mode dev)');
+      console.log('═══════════════════════════════════════════════════');
+      console.log(`À: ${email}`);
+      console.log(`Lien de réinitialisation: ${resetUrl}`);
+      console.log('═══════════════════════════════════════════════════');
+      console.log('');
+      return { success: true, preview: true };
+    }
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`✅ Email de reset envoyé à ${email}: ${info.messageId}`);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error('❌ Erreur envoi email reset:', error);
+    return { success: false, error: error.message };
+  }
+};
+
