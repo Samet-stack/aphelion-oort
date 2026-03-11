@@ -1,5 +1,7 @@
 // Service API pour communiquer avec le backend
-export const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3001/api' : '/api');
+// En dev, Vite proxifie /api -> localhost:3001 (vite.config.ts server.proxy)
+// En prod, Vercel route /api -> api/index.ts (vercel.json routes)
+export const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -87,7 +89,7 @@ const fetchWithAuth = async (
       headers
     });
   } catch {
-    throw new Error('Impossible de contacter le serveur. Rechargez la page et verifiez votre connexion.');
+    throw new Error('Impossible de contacter le serveur. Vérifiez votre connexion internet.');
   }
 
   const data = await response.json();
