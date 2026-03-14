@@ -12,13 +12,13 @@ export const ProtectedRoute = () => {
     if (isLoading) {
         return (
             <div className="view view--centered">
-                <div className="card" style={{ maxWidth: '420px', width: '100%', textAlign: 'center', padding: '2.5rem 2rem' }}>
-                    <div className="spin" style={{ fontSize: '2rem', marginBottom: '1rem' }}>⏳</div>
-                    <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '0.25rem' }}>
-                        Chargement...
-                    </h2>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                        Connexion au serveur et preparation de la session.
+                <div className="card analysis" style={{ maxWidth: '420px', width: '100%', padding: '2.5rem 2rem' }}>
+                    <div className="analysis__icon">
+                        <span className="spin" style={{ fontSize: '1.4rem' }}>⏳</span>
+                    </div>
+                    <h2 className="analysis__title">Ouverture de l'application</h2>
+                    <p className="analysis__copy">
+                        Nous verifions votre session et preparons vos donnees.
                     </p>
                 </div>
             </div>

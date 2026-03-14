@@ -1,6 +1,7 @@
 node_modules
 
 .vercel
+.claude/
 .env*.local
 .env
 server/.env
