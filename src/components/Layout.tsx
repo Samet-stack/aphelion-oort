@@ -58,7 +58,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             >
                 <div className="header-left">
                     <div className="brand">
-                        <div className="brand__mark" style={{ background: 'var(--primary)', color: 'black' }}>
+                        <div className="brand__mark">
                             {showLogo ? (
                                 <img
                                     src={branding.logoUrl}

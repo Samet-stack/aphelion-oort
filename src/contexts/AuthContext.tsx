@@ -8,6 +8,7 @@ interface AuthContextType {
   isLoading: boolean;
   reports: ApiReport[];
   login: (email: string, password: string) => Promise<void>;
+  loginAsDemo: () => Promise<void>;
   register: (data: {
     email: string;
     password: string;
@@ -152,6 +153,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(data.user);
   }, [refreshReports, loadStats]);
 
+  const loginAsDemo = useCallback(async () => {
+    const demoPassword = `Demo!${Date.now()}`;
+    const demoEmail = `demo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@siteflow.demo`;
+
+    await authApi.register({
+      email: demoEmail,
+      password: demoPassword,
+      firstName: 'Visiteur',
+      lastName: 'Demo',
+      companyName: 'Entreprise Demo'
+    });
+
+    const data = await authApi.login(demoEmail, demoPassword);
+    await Promise.all([refreshReports(), loadStats()]);
+    setUser(data.user);
+  }, [refreshReports, loadStats]);
+
   const register = useCallback(async (data: {
     email: string;
     password: string;
@@ -226,6 +244,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading,
         reports,
         login,
+        loginAsDemo,
         register,
         logout,
         refreshUser,

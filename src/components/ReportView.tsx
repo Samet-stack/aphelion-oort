@@ -11,6 +11,7 @@ import { VoiceRecorderComponent } from './VoiceRecorder';
 import { branding } from '../config/branding';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store/useAppStore';
+import { getReportShareHelp, getReportStorageMessage } from '../utils/report-flow';
 
 type ReportData = {
     dateLabel: string;
@@ -94,16 +95,19 @@ const formatReportId = (date: Date) => {
 
 export const ReportView: React.FC = () => {
     const navigate = useNavigate();
-    const { capturedImage, selectedPlan, resetApp } = useAppStore();
+    const { capturedImage, capturedImageAsset, selectedPlan, resetApp, restoreCapturedImage } = useAppStore();
     const { refreshReports, saveReportOffline, user } = useAuth();
     const [analyzing, setAnalyzing] = useState(true);
     const [analysisStage, setAnalysisStage] = useState(0);
+    const [isRecoveringDraft, setIsRecoveringDraft] = useState(true);
     const [imageUrl, setImageUrl] = useState<string>('');
     const [reportData, setReportData] = useState<ReportData | null>(null);
     const [description, setDescription] = useState('');
     const [downloadState, setDownloadState] = useState<'idle' | 'loading' | 'done'>('idle');
     const [error, setError] = useState<string | null>(null);
     const [infoMessage, setInfoMessage] = useState<string | null>(null);
+    const [isReportStored, setIsReportStored] = useState(false);
+    const [savedServerReportId, setSavedServerReportId] = useState<string | null>(null);
 
     // Pilier 2: Intégrité
     const [integrityProof, setIntegrityProof] = useState<IntegrityProof | null>(null);
@@ -126,10 +130,42 @@ export const ReportView: React.FC = () => {
     const [category, setCategory] = useState<'safety' | 'progress' | 'anomaly' | 'other'>('other');
 
     useEffect(() => {
-        if (!capturedImage || !selectedPlan) {
-            navigate('/select-plan');
+        let active = true;
+
+        const hydrateDraft = async () => {
+            if (capturedImage || !capturedImageAsset) {
+                if (active) setIsRecoveringDraft(false);
+                return;
+            }
+
+            try {
+                await restoreCapturedImage();
+            } catch (err) {
+                console.error('Failed to restore draft image:', err);
+            } finally {
+                if (active) setIsRecoveringDraft(false);
+            }
+        };
+
+        hydrateDraft();
+
+        return () => {
+            active = false;
+        };
+    }, [capturedImage, capturedImageAsset, restoreCapturedImage]);
+
+    useEffect(() => {
+        if (isRecoveringDraft) return;
+
+        if (!selectedPlan) {
+            navigate('/select-plan', { replace: true });
+            return;
         }
-    }, [capturedImage, selectedPlan, navigate]);
+
+        if (!capturedImage) {
+            navigate('/camera', { replace: true });
+        }
+    }, [capturedImage, isRecoveringDraft, navigate, selectedPlan]);
 
     const progress = useMemo(() => {
         if (!analyzing) {
@@ -239,6 +275,20 @@ export const ReportView: React.FC = () => {
         };
     }, [capturedImage]);
 
+    if (isRecoveringDraft) {
+        return (
+            <div className="view view--centered">
+                <div className="card analysis">
+                    <div className="analysis__icon">
+                        <Loader2 size={32} className="spin" />
+                    </div>
+                    <h2 className="analysis__title">Reprise du brouillon</h2>
+                    <p className="analysis__copy">Nous rechargeons votre photo et votre chantier.</p>
+                </div>
+            </div>
+        );
+    }
+
     if (!capturedImage || !selectedPlan) return null;
 
     const handleDownload = async () => {
@@ -262,6 +312,7 @@ export const ReportView: React.FC = () => {
             // Préparer les données du rapport
             const reportPayload = {
                 reportId: reportData.reportId,
+                companyName: user?.companyName || branding.companyName,
                 dateLabel: reportData.dateLabel,
                 address: reportData.address,
                 coordinates: reportData.coordinates,
@@ -285,17 +336,24 @@ export const ReportView: React.FC = () => {
                 }))
             };
 
-            // Essayer de sauvegarder sur le serveur
-            try {
-                await reportsApi.create(reportPayload);
-                // Succès serveur → rafraîchir la liste
-                await refreshReports();
-            } catch (err: any) {
-                // Si erreur réseau ou serveur, sauvegarder localement
-                console.log('Sauvegarde serveur échouée, mode offline activé');
-                await saveReportOffline(reportPayload); // ← Appelle déjà refreshReports()
-                // Afficher un message de succès (pas une erreur)
-                setInfoMessage('📱 Rapport sauvegardé localement. Il sera synchronisé quand le réseau reviendra.');
+            if (!isReportStored) {
+                try {
+                    const savedReport = await reportsApi.create(reportPayload);
+                    setIsReportStored(true);
+                    setSavedServerReportId(savedReport.id);
+                    setInfoMessage(getReportStorageMessage('saved_now'));
+                    await refreshReports();
+                } catch (err: any) {
+                    console.log('Sauvegarde serveur échouée, mode offline activé');
+                    await saveReportOffline(reportPayload);
+                    setIsReportStored(true);
+                    setSavedServerReportId(null);
+                    setInfoMessage(getReportStorageMessage('local_now'));
+                }
+            } else if (!savedServerReportId) {
+                setInfoMessage(getReportStorageMessage('local_repeat'));
+            } else {
+                setInfoMessage(getReportStorageMessage('saved_repeat'));
             }
 
             // Générer le PDF
@@ -376,6 +434,7 @@ export const ReportView: React.FC = () => {
         reportData?.accuracy !== null && reportData?.accuracy !== undefined
             ? `Precision ± ${Math.round(reportData.accuracy)} m`
             : 'Precision non disponible';
+    const shareState = getReportShareHelp(savedServerReportId);
 
     if (analyzing) {
         return (
@@ -397,7 +456,7 @@ export const ReportView: React.FC = () => {
                     </div>
                     <h2 className="analysis__title">Analyse en cours</h2>
                     <p className="analysis__copy">
-                        Extraction GPS, horodatage et description intelligente en temps reel.
+                        Nous preparons votre rapport avec la photo, la localisation et un texte de base.
                     </p>
                     <div className="progress">
                         <div className="progress__bar" style={{ width: `${progress}%` }} />
@@ -451,10 +510,11 @@ export const ReportView: React.FC = () => {
                 <div className="report__header">
                     <div>
                         <h2>Rapport pret a exporter</h2>
-                        <p>Verifiez la description puis telechargez le PDF professionnel.</p>
+                        <p>Verifiez les infos puis enregistrez et telechargez le PDF.</p>
                         <p className="detail-sub">ID Rapport: {reportData?.reportId}</p>
                         {error && <p className="detail-sub" style={{ color: '#ff6b6b' }}>{error}</p>}
                         {infoMessage && <p className="detail-sub" style={{ color: '#7cfc8a' }}>{infoMessage}</p>}
+                        <p className="detail-sub">{shareState.helperText}</p>
                     </div>
                     <div className="report__actions">
                         {/* Pilier 2: Badge intégrité */}
@@ -465,10 +525,9 @@ export const ReportView: React.FC = () => {
                         )}
                         <button className="btn btn--ghost" onClick={() => navigate('/camera')}>
                             <FileText size={18} />
-                            Reprendre la photo
+                            Changer la photo
                         </button>
-                        {/* Pilier 4: Bouton partage */}
-                        <button className="btn btn--ghost" onClick={() => setShowShare(true)}>
+                        <button className="btn btn--ghost" onClick={() => setShowShare(true)} disabled={!shareState.canShare}>
                             <Share2 size={18} />
                             Partager
                         </button>
@@ -519,38 +578,38 @@ export const ReportView: React.FC = () => {
                             <span className="detail-label">Informations chantier</span>
                             <div className="form-grid">
                                 <div className="form-field">
-                                    <label>Nom du chantier</label>
+                                    <label>Chantier</label>
                                     <input
                                         type="text"
                                         className="input"
                                         value={siteName}
                                         onChange={(e) => setSiteName(e.target.value)}
-                                        placeholder="Ex: Construction Bâtiment A"
+                                        placeholder="Ex: Batiment A"
                                     />
                                 </div>
                                 <div className="form-field">
-                                    <label>Operateur</label>
+                                    <label>Nom de l'operateur</label>
                                     <input
                                         type="text"
                                         className="input"
                                         value={operatorName}
                                         onChange={(e) => setOperatorName(e.target.value)}
-                                        placeholder="Nom de l'operateur"
+                                        placeholder="Ex: Ahmed"
                                     />
                                 </div>
                                 <div className="form-field">
-                                    <label>Client</label>
+                                    <label>Nom du client</label>
                                     <input
                                         type="text"
                                         className="input"
                                         value={clientName}
                                         onChange={(e) => setClientName(e.target.value)}
-                                        placeholder="Nom du client"
+                                        placeholder="Ex: M. Martin"
                                     />
                                 </div>
                                 <div className="form-field form-field--row">
                                     <div className="form-field">
-                                        <label>Priorite</label>
+                                        <label>Niveau d'urgence</label>
                                         <select
                                             className="input select"
                                             value={priority}
@@ -562,7 +621,7 @@ export const ReportView: React.FC = () => {
                                         </select>
                                     </div>
                                     <div className="form-field">
-                                        <label>Categorie</label>
+                                        <label>Type de rapport</label>
                                         <select
                                             className="input select"
                                             value={category}
@@ -604,7 +663,7 @@ export const ReportView: React.FC = () => {
                                 className="textarea"
                                 value={description}
                                 onChange={(event) => setDescription(event.target.value)}
-                                placeholder="Décrivez les observations..."
+                                placeholder="Expliquez simplement ce que vous voyez sur place."
                             />
                         </div>
 
@@ -648,9 +707,9 @@ export const ReportView: React.FC = () => {
             </section>
 
             {/* Modal: Partage */}
-            {showShare && reportData && (
+            {showShare && savedServerReportId && (
                 <ShareReportModal
-                    reportId={reportData.reportId}
+                    reportId={savedServerReportId}
                     siteName={siteName}
                     onClose={() => setShowShare(false)}
                 />

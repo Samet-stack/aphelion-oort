@@ -8,13 +8,19 @@ export default defineConfig({
         react(),
         VitePWA({
             registerType: 'autoUpdate',
-            includeAssets: ['logo.png'],
+            includeAssets: ['logo-v2.png'],
+            devOptions: {
+                enabled: false,
+            },
             // Workaround: in some environments Workbox SW bundling can crash when
             // minifying via terser ("Unexpected early exit ... (terser) renderChunk").
             // Generating an unminified SW keeps `npm run build` reliable.
             workbox: {
                 mode: 'development',
                 disableDevLogs: true,
+                cleanupOutdatedCaches: true,
+                clientsClaim: true,
+                skipWaiting: true,
             },
             manifest: {
                 name: 'SiteFlow Pro',
@@ -26,12 +32,12 @@ export default defineConfig({
                 orientation: 'portrait',
                 icons: [
                     {
-                        src: 'logo.png',
+                        src: 'logo-v2.png',
                         sizes: '1024x1024',
                         type: 'image/png'
                     },
                     {
-                        src: 'logo.png',
+                        src: 'logo-v2.png',
                         sizes: '512x512',
                         type: 'image/png',
                         purpose: 'any maskable'

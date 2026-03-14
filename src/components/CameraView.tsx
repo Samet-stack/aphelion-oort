@@ -3,7 +3,7 @@ import { Camera, Upload, ArrowLeft, MapPin, Building2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useAppStore } from '../store/useAppStore';
-import { getFileConversionErrorMessage, normalizeFileToImageFile } from '../services/file-conversion';
+import { getFileConversionErrorMessage, normalizeFileToImageFile, readFileAsDataUrl } from '../services/file-conversion';
 
 export const CameraView: React.FC = () => {
     const navigate = useNavigate();
@@ -34,7 +34,13 @@ export const CameraView: React.FC = () => {
                 toast.success('PDF importe. Page 1 convertie en image pour le rapport.');
             }
 
-            setCapturedImage(normalizedFile);
+            const dataUrl = await readFileAsDataUrl(normalizedFile);
+            setCapturedImage(normalizedFile, {
+                dataUrl,
+                name: normalizedFile.name,
+                type: normalizedFile.type,
+                lastModified: normalizedFile.lastModified,
+            });
             navigate('/report');
         } catch (err) {
             console.error('Error processing capture file:', err);
@@ -91,7 +97,7 @@ export const CameraView: React.FC = () => {
             <div className="card camera">
                 <div className="camera__header">
                     <h2>Nouvelle capture terrain</h2>
-                    <p>Photographiez l&apos;anomalie ou importez une image/PDF pour ce chantier.</p>
+                    <p>Prenez une photo ou importez un fichier. Si vous quittez la page, le brouillon reste disponible.</p>
                 </div>
 
                 <input
@@ -125,9 +131,9 @@ export const CameraView: React.FC = () => {
                         {processingFile ? <Upload size={28} className="spin" /> : <Camera size={28} />}
                     </div>
                     <p className="dropzone__title">
-                        {processingFile ? 'Traitement du fichier en cours...' : 'Deposez la photo/PDF ou cliquez pour importer'}
+                        {processingFile ? 'Traitement du fichier en cours...' : 'Deposez un fichier ici ou cliquez pour importer'}
                     </p>
-                    <p className="dropzone__hint">Formats JPG, PNG, PDF. Le PDF utilise automatiquement sa page 1.</p>
+                    <p className="dropzone__hint">Formats JPG, PNG, PDF. Pour un PDF, la page 1 est utilisée.</p>
                 </div>
 
                 <div className="camera__actions">

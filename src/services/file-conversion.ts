@@ -24,6 +24,15 @@ export const getFileConversionErrorMessage = (error: unknown) => {
   return 'Impossible de traiter ce fichier. Essayez un autre PDF/image.';
 };
 
+export const readFileAsDataUrl = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('Impossible de lire le fichier'));
+    reader.readAsDataURL(file);
+  });
+};
+
 const hasPdfSignature = (bytes: Uint8Array) => {
   if (bytes.length < 5) return false;
   return bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46 && bytes[4] === 0x2d;

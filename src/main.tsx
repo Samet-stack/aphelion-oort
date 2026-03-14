@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
+import { registerSW } from 'virtual:pwa-register'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import App from './App'
 import './index.css'
@@ -11,6 +12,15 @@ import './index.css'
 if (import.meta.env.DEV && 'serviceWorker' in navigator) {
     navigator.serviceWorker.getRegistrations().then((regs) => {
         regs.forEach((reg) => reg.unregister())
+    })
+}
+
+if (import.meta.env.PROD) {
+    const updateSW = registerSW({
+        immediate: true,
+        onNeedRefresh() {
+            updateSW(true)
+        },
     })
 }
 

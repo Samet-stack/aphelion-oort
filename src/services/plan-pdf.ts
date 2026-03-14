@@ -98,7 +98,12 @@ const renderPlanWithMarkers = (plan: ApiPlan): Promise<string> => {
   });
 };
 
-export const generatePlanPDF = async (plan: ApiPlan) => {
+export const generatePlanPDF = async (
+  plan: ApiPlan,
+  options?: {
+    companyName?: string;
+  }
+) => {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
 
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -106,6 +111,7 @@ export const generatePlanPDF = async (plan: ApiPlan) => {
   const margin = 15;
   const contentWidth = pageWidth - margin * 2;
   const productName = branding.productName || 'SiteFlow Pro';
+  const companyName = options?.companyName?.trim() || branding.companyName || 'Votre entreprise';
 
   let currentY = 0;
 
@@ -121,6 +127,9 @@ export const generatePlanPDF = async (plan: ApiPlan) => {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   doc.text('Rapport de Plan - Points d\'Inspection', margin, 22);
+
+  doc.setFontSize(9);
+  doc.text(companyName, margin, 28);
 
   setTextColor(doc, palette.secondary);
   doc.setFont('helvetica', 'bold');

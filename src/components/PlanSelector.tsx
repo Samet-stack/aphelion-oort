@@ -113,7 +113,7 @@ export const PlanSelector: React.FC = () => {
         <div className="plan-selector__header">
           <div className="plan-selector__title-wrap">
             <h2>Selectionner un chantier</h2>
-            <p>Choisissez un plan pour lancer la capture et preparer votre rapport.</p>
+            <p>Choisissez un chantier pour commencer. Vous pourrez ensuite ajouter une photo et creer le rapport.</p>
           </div>
           <button className="btn btn--ghost" onClick={() => navigate('/plans')}>
             <Plus size={16} />
@@ -137,7 +137,7 @@ export const PlanSelector: React.FC = () => {
             <Map size={50} />
             <h3>Aucun chantier disponible</h3>
             <p>
-              Vous devez d'abord créer un plan de chantier avant de pouvoir faire un rapport
+              Creez d'abord un chantier pour commencer votre premier rapport.
             </p>
             <button className="btn btn--primary" onClick={() => navigate('/plans')}>
               <Plus size={18} />

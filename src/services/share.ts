@@ -1,4 +1,4 @@
-// Service de partage et liens uniques (Pilier 4: Coordination Ultra-Rapide)
+// Service de partage - version orientee usage terrain et acces app reel
 
 export interface SharedReport {
     id: string;
@@ -10,16 +10,9 @@ export interface SharedReport {
     recipient?: string;
 }
 
-// Génère un ID unique pour le lien de partage
-export const generateShareId = (): string => {
-    const timestamp = Date.now().toString(36).toUpperCase();
-    const random = Math.random().toString(36).substring(2, 6).toUpperCase();
-    return `SF-${timestamp}-${random}`;
-};
-
-// Crée un lien de partage temporaire (7 jours par défaut)
-export const createShareLink = (shareId: string, baseUrl: string = window.location.origin): string => {
-    return `${baseUrl}/view/${shareId}`;
+// Cree un lien vers l'application pour retrouver le rapport.
+export const createShareLink = (reportId: string, baseUrl: string = window.location.origin): string => {
+    return `${baseUrl}/history?report=${encodeURIComponent(reportId)}`;
 };
 
 // Partage natif (Web Share API)
@@ -49,10 +42,10 @@ export const shareViaWhatsApp = (phone: string, message: string): void => {
     window.open(url, '_blank');
 };
 
-// Génère le message de partage
+// Genere un message simple, sans promesse trompeuse sur un faux lien public.
 export const generateShareMessage = (reportId: string, link: string, siteName?: string): string => {
-    const site = siteName ? `*${siteName}*` : 'le chantier';
-    return `📝 *Rapport de chantier*\n\nBonjour,\nVoici le rapport pour ${site}.\n\nID: ${reportId}\n\n📎 Consulter le rapport:\n${link}\n\nCe lien est valable 7 jours.`;
+    const site = siteName ? `*${siteName}*` : 'ce chantier';
+    return `📝 *Rapport de chantier*\n\nBonjour,\nVoici le resume du rapport pour ${site}.\n\nID rapport: ${reportId}\n\nOuvrir l'application :\n${link}\n\nSi vous n'avez pas encore d'acces, contactez le responsable du chantier.`;
 };
 
 // Génère un QR Code en data URL (utilise une API externe simple)
@@ -61,7 +54,7 @@ export const generateQRCode = (url: string, size: number = 200): string => {
     return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(url)}`;
 };
 
-// Vérifie si un lien est encore valide
+// Verifie si un lien local est encore valide
 export const isLinkValid = (sharedReport: SharedReport): boolean => {
     return new Date(sharedReport.expiresAt) > new Date();
 };
@@ -109,7 +102,7 @@ Ce lien expirera dans 7 jours.
     return new Blob([content], { type: 'text/plain' });
 };
 
-// Tracking des vues (stocké en local pour l'instant)
+// Tracking des vues (stocke en local pour l'instant)
 export const trackView = (shareId: string): void => {
     const key = `siteflow_share_${shareId}`;
     const data = localStorage.getItem(key);

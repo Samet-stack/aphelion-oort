@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Mail, Lock, ArrowRight, AlertCircle } from 'lucide-react';
+import { Mail, Lock, ArrowRight, AlertCircle, Wand2 } from 'lucide-react';
+import { branding } from '../config/branding';
 
 interface LoginProps {
   onSwitchToRegister: () => void;
@@ -14,7 +15,7 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, loginAsDemo } = useAuth();
 
   useEffect(() => {
     const emailFromUrl = searchParams.get('email');
@@ -37,14 +38,28 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
     }
   };
 
+  const handleDemoAccess = async () => {
+    setError('');
+    setIsLoading(true);
+
+    try {
+      await loginAsDemo();
+      navigate('/', { replace: true });
+    } catch (err: any) {
+      setError(err.message || 'Impossible de lancer le mode demo');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="view view--centered auth-shell">
       <div className="auth-container auth-card">
         <div className="auth-brand">
           <div className="auth-logo">
             <img
-              src="/logo.png"
-              alt="SiteFlow Pro"
+              src={branding.logoUrl}
+              alt={branding.productName}
               className="auth-logo__img"
             />
           </div>
@@ -115,6 +130,16 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
                 </>
               )}
             </button>
+
+            <button
+              type="button"
+              disabled={isLoading}
+              className="btn btn--ghost"
+              onClick={handleDemoAccess}
+            >
+              <Wand2 size={18} />
+              Tester sans compte
+            </button>
           </form>
 
           <div className="auth-switch">
@@ -143,6 +168,10 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
             <div className="auth-features__emoji">📱</div>
             Accès multi-appareils
           </div>
+        </div>
+
+        <div className="auth-footer-note">
+          Mode demo disponible pour laisser un visiteur tester l'application instantanément.
         </div>
 
       </div>

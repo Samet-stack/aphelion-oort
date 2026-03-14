@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Mail, Lock, User, ArrowRight, AlertCircle, Briefcase } from 'lucide-react';
+import { branding } from '../config/branding';
 
 interface RegisterProps {
   onSwitchToLogin: () => void;
@@ -66,8 +67,8 @@ export const Register: React.FC<RegisterProps> = ({ onSwitchToLogin }) => {
         <div className="auth-brand">
           <div className="auth-logo">
             <img
-              src="/logo.png"
-              alt="SiteFlow Pro"
+              src={branding.logoUrl}
+              alt={branding.productName}
               className="auth-logo__img"
             />
           </div>

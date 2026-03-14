@@ -37,7 +37,7 @@ const categoryLabels: Record<string, string> = {
 
 export const PlanView: React.FC = () => {
   const navigate = useNavigate();
-  const { offlineState, getCachedPlans, saveCachedPlan, getAllPlanPointsForPlan, savePlanPointOffline } = useAuth();
+  const { offlineState, getCachedPlans, saveCachedPlan, getAllPlanPointsForPlan, savePlanPointOffline, user } = useAuth();
 
   // Sub-views
   const [subView, setSubView] = useState<SubView>('LIST');
@@ -355,7 +355,9 @@ export const PlanView: React.FC = () => {
     if (!currentPlan) return;
     setGeneratingPdf(true);
     try {
-      await generatePlanPDF(currentPlan);
+      await generatePlanPDF(currentPlan, {
+        companyName: user?.companyName,
+      });
     } catch (err) {
       console.error('Error generating PDF:', err);
       toast.error('Erreur lors de la generation du PDF.');

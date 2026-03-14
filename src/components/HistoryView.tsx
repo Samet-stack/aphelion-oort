@@ -52,7 +52,7 @@ export const HistoryView: React.FC = () => {
                 accuracy: report.accuracy,
                 locationSource: report.locationSource as 'gps' | 'demo' | 'unavailable',
                 reportId: report.reportId,
-                companyName: user?.companyName || branding.companyName,
+                companyName: report.companyName || user?.companyName || branding.companyName,
                 reportTitle: branding.reportTitle,
                 productName: branding.productName,
                 logoUrl: branding.logoUrl,

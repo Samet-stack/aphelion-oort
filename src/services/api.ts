@@ -28,6 +28,7 @@ export interface User {
 export interface ApiReport {
   id: string;
   reportId: string;
+  companyName?: string;
   createdAt: string;
   dateLabel: string;
   address: string;

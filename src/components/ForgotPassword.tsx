@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, ArrowLeft, ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { API_URL } from '../services/api';
+import { branding } from '../config/branding';
 
 export const ForgotPassword = () => {
     const navigate = useNavigate();
@@ -46,8 +47,8 @@ export const ForgotPassword = () => {
                         marginBottom: '1rem',
                     }}>
                         <img
-                            src="/logo.png"
-                            alt="SiteFlow Pro"
+                            src={branding.logoUrl}
+                            alt={branding.productName}
                             style={{
                                 width: '80px',
                                 height: '80px',

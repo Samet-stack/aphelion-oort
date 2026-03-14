@@ -33,15 +33,15 @@ export const Hero: React.FC = () => {
             >
                 <div className="hero__content">
                     <motion.p variants={itemVariants} className="hero__eyebrow" style={{ color: 'var(--primary)' }}>
-                        Flux chantier simplifie
+                        Rapports chantier simples
                     </motion.p>
                     <motion.h1 variants={itemVariants} className="hero__title">
                         Créez des rapports chantier
                         <br />clairs, rapides et partageables.
                     </motion.h1>
                     <motion.p variants={itemVariants} className="hero__copy">
-                        Un parcours simple pour vos equipes terrain: selection du chantier,
-                        capture photo, informations metier, PDF propre et partage instantane.
+                        Choisissez un chantier, ajoutez une photo, completez les infos utiles,
+                        puis telechargez un PDF clair pour votre client ou votre equipe.
                     </motion.p>
 
                     <motion.div variants={itemVariants} className="hero__actions">
@@ -81,7 +81,7 @@ export const Hero: React.FC = () => {
                             </div>
                             <div>
                                 <p className="pipeline-step__title">Capture rapide</p>
-                                <p className="pipeline-step__meta">Photo terrain en 1 geste</p>
+                                <p className="pipeline-step__meta">Photo ou PDF en quelques secondes</p>
                             </div>
                         </div>
                         <div className="pipeline-step">
@@ -90,7 +90,7 @@ export const Hero: React.FC = () => {
                             </div>
                             <div>
                                 <p className="pipeline-step__title">Analyse intelligente</p>
-                                <p className="pipeline-step__meta">Description automatique</p>
+                                <p className="pipeline-step__meta">Texte de base et localisation pre-remplis</p>
                             </div>
                         </div>
                         <div className="pipeline-step">
@@ -99,7 +99,7 @@ export const Hero: React.FC = () => {
                             </div>
                             <div>
                                 <p className="pipeline-step__title">PDF pro</p>
-                                <p className="pipeline-step__meta">Mise en page immédiate</p>
+                                <p className="pipeline-step__meta">Export simple a partager</p>
                             </div>
                         </div>
                     </motion.div>
@@ -123,13 +123,13 @@ export const Hero: React.FC = () => {
                             <span className="hero-metric-card__label">
                                 <ShieldCheck size={14} /> Tracabilite
                             </span>
-                            <strong>Hash d'integrite inclus</strong>
+                            <strong>Integrite du rapport incluse</strong>
                         </div>
                     </div>
                     <div className="hero-note">
                         <p className="hero-note__title">Conseil du jour</p>
                         <p className="hero-note__text">
-                            Ajoutez le nom de l'operateur et du client avant export pour des PDFs plus clairs.
+                            Ajoutez le nom du client et de l'operateur avant export pour un PDF plus clair.
                         </p>
                     </div>
                 </motion.aside>

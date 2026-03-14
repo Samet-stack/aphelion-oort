@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { X, Camera, Upload } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { normalizeFileToImageDataUrl, getFileConversionErrorMessage } from '../services/file-conversion';
@@ -53,6 +53,17 @@ export const PlanPointForm: React.FC<PlanPointFormProps> = ({ onSave, onClose, i
   const [room, setRoom] = useState(initialData?.room || '');
   const [status, setStatus] = useState<'a_faire' | 'en_cours' | 'termine'>(initialData?.status || 'a_faire');
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       try {
@@ -95,7 +106,7 @@ export const PlanPointForm: React.FC<PlanPointFormProps> = ({ onSave, onClose, i
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '520px' }}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '520px' }} role="dialog" aria-modal="true" aria-label={isEdit ? 'Modifier le point' : 'Nouveau point'}>
         <div className="modal__header" style={{ padding: '20px 24px' }}>
           <h3>{isEdit ? 'Modifier le point' : 'Nouveau point'}</h3>
           <button className="btn btn--ghost" onClick={onClose} style={{ padding: '8px' }}>
@@ -105,7 +116,7 @@ export const PlanPointForm: React.FC<PlanPointFormProps> = ({ onSave, onClose, i
         <div className="modal__body" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {/* Photo */}
           <div className="form-field" style={{ marginBottom: '4px' }}>
-            <label style={{ display: 'block', marginBottom: '10px', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)' }}>Photo / Document *</label>
+            <label style={{ display: 'block', marginBottom: '10px', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)' }}>Photo ou document *</label>
             <input
               type="file"
               accept="image/*"
@@ -134,7 +145,7 @@ export const PlanPointForm: React.FC<PlanPointFormProps> = ({ onSave, onClose, i
                   style={{ width: '100%' }}
                   disabled={processingFile}
                 >
-                  <Camera size={16} /> Changer le document
+                  <Camera size={16} /> Changer le fichier
                 </button>
               </div>
             ) : (
@@ -151,25 +162,25 @@ export const PlanPointForm: React.FC<PlanPointFormProps> = ({ onSave, onClose, i
 
           {/* Titre */}
           <div className="form-field" style={{ marginBottom: '4px' }}>
-            <label style={{ display: 'block', marginBottom: '10px', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)' }}>Titre *</label>
-            <input
+              <label style={{ display: 'block', marginBottom: '10px', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)' }}>Titre *</label>
+              <input
               type="text"
               className="input"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Ex: Radiateur Salon"
+                placeholder="Ex: Radiateur salon"
               style={{ padding: '12px 14px' }}
             />
           </div>
 
           {/* Description */}
           <div className="form-field" style={{ marginBottom: '4px' }}>
-            <label style={{ display: 'block', marginBottom: '10px', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)' }}>Description</label>
+              <label style={{ display: 'block', marginBottom: '10px', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)' }}>Description</label>
             <textarea
               className="textarea"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Details supplementaires..."
+                placeholder="Ajoutez un detail utile si besoin"
               rows={3}
               style={{ padding: '12px 14px' }}
             />
@@ -178,7 +189,7 @@ export const PlanPointForm: React.FC<PlanPointFormProps> = ({ onSave, onClose, i
           {/* Categorie + Statut */}
           <div className="form-grid" style={{ gap: '16px' }}>
             <div className="form-field" style={{ marginBottom: '4px' }}>
-              <label style={{ display: 'block', marginBottom: '10px', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)' }}>Categorie</label>
+              <label style={{ display: 'block', marginBottom: '10px', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)' }}>Type</label>
               <select className="input select" value={category} onChange={(e) => setCategory(e.target.value)} style={{ padding: '12px 14px' }}>
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>{c.label}</option>
@@ -186,7 +197,7 @@ export const PlanPointForm: React.FC<PlanPointFormProps> = ({ onSave, onClose, i
               </select>
             </div>
             <div className="form-field" style={{ marginBottom: '4px' }}>
-              <label style={{ display: 'block', marginBottom: '10px', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)' }}>Statut</label>
+              <label style={{ display: 'block', marginBottom: '10px', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)' }}>Etat</label>
               <select
                 className="input select"
                 value={status}
@@ -213,13 +224,13 @@ export const PlanPointForm: React.FC<PlanPointFormProps> = ({ onSave, onClose, i
               />
             </div>
             <div className="form-field" style={{ marginBottom: '4px' }}>
-              <label style={{ display: 'block', marginBottom: '10px', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)' }}>Lieu / Piece</label>
+              <label style={{ display: 'block', marginBottom: '10px', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)' }}>Lieu / piece</label>
               <input
                 type="text"
                 className="input"
                 value={room}
                 onChange={(e) => setRoom(e.target.value)}
-                placeholder="Ex: Salon, Chambre 2..."
+                placeholder="Ex: Salon, chambre 2"
                 style={{ padding: '12px 14px' }}
               />
             </div>

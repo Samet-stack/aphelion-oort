@@ -78,11 +78,11 @@ define(['./workbox-5a5d9309'], (function (workbox) { 'use strict';
    * See https://goo.gl/S9QRab
    */
   workbox.precacheAndRoute([{
-    "url": "registerSW.js",
-    "revision": "1872c500de691dce40960bb85481de07"
-  }, {
     "url": "index.html",
-    "revision": "4387577b0ea216c30e7c7aedd0b67c37"
+    "revision": "798f4038f528380e99ae416e382b581a"
+  }, {
+    "url": "assets/workbox-window.prod.es5-vqzQaGvo.js",
+    "revision": null
   }, {
     "url": "assets/purify.es-C_uT9hQ1.js",
     "revision": null
@@ -93,7 +93,7 @@ define(['./workbox-5a5d9309'], (function (workbox) { 'use strict';
     "url": "assets/pdf.worker.min-DG2s7Vj_.js",
     "revision": null
   }, {
-    "url": "assets/pdf-premium-DBKAt-nj.js",
+    "url": "assets/pdf-premium-DbveWoGr.js",
     "revision": null
   }, {
     "url": "assets/pdf-C_v4LfPZ.js",
@@ -102,23 +102,23 @@ define(['./workbox-5a5d9309'], (function (workbox) { 'use strict';
     "url": "assets/pdf-B49YaGYl.js",
     "revision": null
   }, {
-    "url": "assets/index.es-DC0ceien.js",
+    "url": "assets/index.es-BMOqYwjC.js",
     "revision": null
   }, {
-    "url": "assets/index-INq6k-15.css",
+    "url": "assets/index-u3T3x7Bj.js",
     "revision": null
   }, {
-    "url": "assets/index-DU0yA7ma.js",
+    "url": "assets/index-B6zh4WrJ.css",
     "revision": null
   }, {
     "url": "assets/html2canvas.esm-CBrSDip1.js",
     "revision": null
   }, {
-    "url": "logo.png",
-    "revision": "a01978dc031fa6b4853761ad8bb7d60c"
+    "url": "logo-v2.png",
+    "revision": "0ee771e14f01297395fd76cda98dc82c"
   }, {
     "url": "manifest.webmanifest",
-    "revision": "7b4da8ed997009704983cbb4371bd8aa"
+    "revision": "a96e3763eb799831e2d12a2882d29928"
   }], {});
   workbox.cleanupOutdatedCaches();
   workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("index.html")));

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Share2, MessageCircle, Mail, Link2, Check, Copy, QrCode, X, Smartphone } from 'lucide-react';
-import { generateShareId, createShareLink, generateShareMessage, generateQRCode, shareViaWhatsApp, shareViaEmail } from '../services/share';
+import { createShareLink, generateShareMessage, generateQRCode, shareViaWhatsApp, shareViaEmail } from '../services/share';
 
 interface ShareReportProps {
     reportId: string;
@@ -17,9 +17,19 @@ export const ShareReportModal: React.FC<ShareReportProps> = ({ reportId, siteNam
     const [copied, setCopied] = useState(false);
     const [sent, setSent] = useState(false);
 
-    const shareId = generateShareId();
-    const shareLink = createShareLink(shareId);
-    const message = generateShareMessage(reportId, shareLink, siteName);
+    const shareLink = useMemo(() => createShareLink(reportId), [reportId]);
+    const message = useMemo(() => generateShareMessage(reportId, shareLink, siteName), [reportId, shareLink, siteName]);
+
+    useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                onClose();
+            }
+        };
+
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [onClose]);
 
     const handleCopyLink = () => {
         navigator.clipboard.writeText(shareLink);
@@ -65,13 +75,13 @@ export const ShareReportModal: React.FC<ShareReportProps> = ({ reportId, siteNam
 
     return (
         <div className="modal-overlay" onClick={onClose}>
-            <div className="modal modal--wide" onClick={(e) => e.stopPropagation()}>
+            <div className="modal modal--wide" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Partager le rapport">
                 <div className="modal__header">
-                    <h3><Share2 size={18} /> Partager le rapport</h3>
-                    <button className="btn btn--ghost" onClick={onClose}>
-                        <X size={18} />
-                    </button>
-                </div>
+                            <h3><Share2 size={18} /> Partager le rapport</h3>
+                            <button className="btn btn--ghost" onClick={onClose} aria-label="Fermer la fenetre de partage">
+                                <X size={18} />
+                            </button>
+                        </div>
 
                 <div className="modal__body">
                     {/* Méthodes de partage */}
@@ -105,11 +115,11 @@ export const ShareReportModal: React.FC<ShareReportProps> = ({ reportId, siteNam
                                             maxLength={10}
                                         />
                                     </div>
-                                    <small className="detail-sub">Format: 06 12 34 56 78</small>
+                                    <small className="detail-sub">Entrez un numero complet pour ouvrir WhatsApp.</small>
                                 </div>
                                 
                                 <div className="share-preview">
-                                    <label>Aperçu du message</label>
+                                    <label>Message envoye</label>
                                     <pre className="share-message">{message}</pre>
                                 </div>
 
@@ -156,7 +166,7 @@ export const ShareReportModal: React.FC<ShareReportProps> = ({ reportId, siteNam
                         {method === 'link' && (
                             <div className="share-section">
                                 <div className="form-field">
-                                    <label>Lien de partage (valable 7 jours)</label>
+                                    <label>Lien vers l'application</label>
                                     <div className="link-copy">
                                         <input
                                             type="text"
@@ -175,10 +185,7 @@ export const ShareReportModal: React.FC<ShareReportProps> = ({ reportId, siteNam
                                 
                                 <div className="share-info">
                                     <p className="detail-sub">
-                                        <strong>Accusé de réception:</strong> Vous serez notifié quand le destinataire ouvre le lien.
-                                    </p>
-                                    <p className="detail-sub">
-                                        <strong>Expiration:</strong> Ce lien expire le {new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('fr-FR')}.
+                                        Ce lien ouvre l'application sur l'historique. Le destinataire doit deja avoir un acces.
                                     </p>
                                 </div>
 
@@ -193,7 +200,7 @@ export const ShareReportModal: React.FC<ShareReportProps> = ({ reportId, siteNam
                         {method === 'qr' && (
                             <div className="share-section share-section--center">
                                 <p className="detail-sub" style={{ marginBottom: '20px' }}>
-                                    Scannez ce QR code pour accéder au rapport
+                                    Scannez ce QR code pour ouvrir l'application
                                 </p>
                                 <div className="qr-code">
                                     <img 
@@ -211,9 +218,9 @@ export const ShareReportModal: React.FC<ShareReportProps> = ({ reportId, siteNam
                 </div>
 
                 <div className="modal__footer">
-                    <button className="btn btn--ghost" onClick={onClose}>Fermer</button>
+                        <button className="btn btn--ghost" onClick={onClose}>Fermer</button>
+                    </div>
                 </div>
             </div>
-        </div>
     );
 };
